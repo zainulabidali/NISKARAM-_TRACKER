@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - Madrasa Tracker</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .nav-tabs .nav-link {
+            color: var(--text-dark);
+            border: none;
+            font-weight: 600;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-right: 4px;
+        }
+
+        .nav-tabs .nav-link.active {
+            background-color: var(--primary-green);
+            color: white;
+        }
+
+        .nav-tabs {
+            border-bottom: none;
+            overflow-x: auto;
+            flex-wrap: nowrap;
+            padding-bottom: 5px;
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        .nav-tabs::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+</head>
+
+<body class="bg-light">
+
+    <div class="app-header shadow-sm position-sticky top-0 z-3">
+        <h1><i class="bi bi-gear-wide-connected"></i> Ustad Settings</h1>
+        <div class="d-flex gap-2">
+            <a href="#" class="btn btn-sm btn-outline-light rounded-pill px-3" id="madrasaLinkBtn">Get Link</a>
+            <button class="btn btn-sm btn-danger rounded-pill px-3" id="logoutBtn">Logout</button>
+        </div>
+    </div>
+
+    <div class="container mb-5 pb-5 mt-3">
+
+        <!-- Tab Navigation -->
+        <ul class="nav nav-tabs mb-4 px-2" id="settingsTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active shadow-sm" id="classes-tab" data-bs-toggle="tab"
+                    data-bs-target="#classes" type="button" role="tab">Classes</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link shadow-sm" id="students-tab" data-bs-toggle="tab" data-bs-target="#students"
+                    type="button" role="tab">Students</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link shadow-sm" id="subjects-tab" data-bs-toggle="tab" data-bs-target="#subjects"
+                    type="button" role="tab">Subjects</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link shadow-sm" id="books-tab" data-bs-toggle="tab" data-bs-target="#books"
+                    type="button" role="tab" style="white-space:nowrap;">Books (Opt)</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link shadow-sm" id="records-tab" data-bs-toggle="tab" data-bs-target="#records"
+                    type="button" role="tab">Records</button>
+            </li>
+        </ul>
+        </ul>
+
+        <!-- Tab Content -->
+        <div class="tab-content" id="settingsTabsContent">
+
+            <!-- CLASSES TAB -->
+            <div class="tab-pane fade show active" id="classes" role="tabpanel">
+                <div class="card p-4 shadow-sm rounded-4 border-0">
+                    <h5 class="text-primary fw-bold mb-3"><i class="bi bi-easel me-2"></i>Classes</h5>
+                    <form id="addClassForm" class="d-flex gap-2 mb-3">
+                        <input type="text" id="className" class="form-control bg-light border-0"
+                            placeholder="e.g., Class 1" required>
+                        <button type="submit" class="btn btn-primary px-3 shadow-sm rounded-pill"><i
+                                class="bi bi-plus-lg"></i> Add</button>
+                    </form>
+                    <ul class="list-group list-group-flush" id="classesList">
+                        <div class="text-center py-2">
+                            <div class="spinner-border spinner-border-sm text-primary"></div>
+                        </div>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- STUDENTS TAB -->
+            <div class="tab-pane fade" id="students" role="tabpanel">
+                <div class="card p-4 shadow-sm rounded-4 border-0">
+                    <h5 class="text-primary fw-bold mb-3"><i class="bi bi-people me-2"></i>Students</h5>
+                    <form id="addStudentForm" class="mb-3">
+                        <div class="mb-2">
+                            <input type="text" id="studentName" class="form-control bg-light border-0"
+                                placeholder="Student Name" required>
+                        </div>
+                        <div class="d-flex gap-2 mt-3">
+                            <select id="studentClass" class="form-select bg-light border-0" required>
+                                <option value="">Select Class</option>
+                            </select>
+                            <button type="submit" class="btn btn-primary shadow-sm px-4 rounded-pill">Add</button>
+                        </div>
+                    </form>
+                    <ul class="list-group list-group-flush gap-2" id="studentsList"></ul>
+                </div>
+            </div>
+
+            <!-- SUBJECTS TAB -->
+            <div class="tab-pane fade" id="subjects" role="tabpanel">
+                <div class="card p-4 shadow-sm rounded-4 border-0">
+                    <h5 class="text-primary fw-bold mb-3"><i class="bi bi-journal-bookmark me-2"></i>Subjects</h5>
+                    <form id="addSubjectForm" class="d-flex gap-2 mb-3">
+                        <input type="text" id="subjectName" class="form-control bg-light border-0"
+                            placeholder="e.g., Quran" required>
+                        <button type="submit" class="btn btn-primary px-3 shadow-sm rounded-pill"><i
+                                class="bi bi-plus-lg"></i> Add</button>
+                    </form>
+                    <ul class="list-group list-group-flush" id="subjectsList"></ul>
+                </div>
+            </div>
+
+            <!-- BOOKS TAB -->
+            <div class="tab-pane fade" id="books" role="tabpanel">
+                <div class="card p-4 shadow-sm rounded-4 border-0">
+                    <h5 class="text-primary fw-bold mb-3"><i class="bi bi-book me-2"></i>Books</h5>
+                    <form id="addBookForm" class="d-flex gap-2 mb-3">
+                        <input type="text" id="bookName" class="form-control bg-light border-0"
+                            placeholder="e.g., Hidaya" required>
+                        <button type="submit" class="btn btn-primary px-3 shadow-sm rounded-pill"><i
+                                class="bi bi-plus-lg"></i> Add</button>
+                    </form>
+                    <ul class="list-group list-group-flush" id="booksList"></ul>
+                </div>
+            </div>
+
+            <!-- RECORDS TAB -->
+            <div class="tab-pane fade" id="records" role="tabpanel">
+                <div class="card p-4 shadow-sm rounded-4 border-0">
+                    <h5 class="text-primary fw-bold mb-3"><i class="bi bi-card-checklist me-2"></i>Manage Records</h5>
+                    <div class="mb-3 d-flex gap-2">
+                        <select id="recordStudentFilter" class="form-select bg-light border-0">
+                            <option value="">All Students</option>
+                        </select>
+                        <input type="date" id="recordDateFilter" class="form-control bg-light border-0">
+                        <button class="btn btn-primary rounded-pill shadow-sm px-3" id="loadRecordsBtn"><i
+                                class="bi bi-search"></i></button>
+                    </div>
+                    <div id="recordsAdminList" class="d-flex flex-column gap-2">
+                        <p class="text-muted small">Select a student or date to view records.</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Edit Modal -->
+    <div class="modal fade" id="editModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 rounded-4 shadow">
+                <div class="modal-header bg-primary text-white border-0 rounded-top-4">
+                    <h5 class="modal-title fw-bold" id="editModalTitle">Edit Item</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <input type="hidden" id="editId">
+                    <input type="hidden" id="editCollection">
+
+                    <div id="standardEditFields">
+                        <label class="form-label text-muted fw-bold small">Name</label>
+                        <input type="text" id="editName" class="form-control bg-light border-0 mb-3">
+                    </div>
+
+                    <div id="studentEditFields" class="d-none">
+                        <label class="form-label text-muted fw-bold small">Class</label>
+                        <select id="editClass" class="form-select bg-light border-0 mb-3"></select>
+                    </div>
+
+                    <button class="btn btn-primary w-100 rounded-pill py-2 fw-bold" id="saveEditBtn">Save
+                        Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Record Edit Modal -->
+    <div class="modal fade" id="recordEditModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 rounded-4 shadow">
+                <div class="modal-header bg-accent text-white border-0 rounded-top-4">
+                    <h5 class="modal-title fw-bold">Edit Prayer Record</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4" id="recordEditFormContainer">
+                    <!-- Dynamically generated fields for Prayers -->
+                </div>
+                <div class="modal-footer border-0">
+                    <button class="btn btn-primary w-100 rounded-pill py-2 fw-bold" id="saveRecordEditBtn">Update
+                        Record</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script type="module" src="js/admin.js"></script>
+</body>
+
+</html>

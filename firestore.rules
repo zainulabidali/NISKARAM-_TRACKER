@@ -1,0 +1,89 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── HELPER FUNCTIONS ───────────────────────────────────────────────────
+
+    function isLoggedIn() {
+      return request.auth != null;
+    }
+
+    // IMPORTANT REQUIREMENT: ONLY ONE SUPER ADMIN UID
+    function isSuperAdmin() {
+      return isLoggedIn() && request.auth.uid == "mt0k0d3UeAgcB8RTzq5k3M97UKa2";
+    }
+
+    // ADMIN VERIFICATION USING ADMINS COLLECTION
+    function isSameMadrasa(madrasaId) {
+      return isLoggedIn() &&
+        get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.madrasaId == madrasaId;
+    }
+
+    function isAuthorizedForMadrasa(madrasaId) {
+       return isSuperAdmin() || isSameMadrasa(madrasaId);
+    }
+
+    // ─── COLLECTION RULES ───────────────────────────────────────────────────
+
+    // MADRASAS
+    match /madrasas/{madrasaId} {
+      // Public users can read basic madrasa info (needed for tracker selection)
+      allow read: if true; 
+      
+      // Only Super Admin can create or delete madrasas
+      allow create, delete: if isSuperAdmin();
+      
+      // Super admin or the specific madrasa admin can update it
+      allow update: if isSuperAdmin() || isSameMadrasa(madrasaId); 
+    }
+
+    // ADMINS
+    match /admins/{adminId} {
+      // Admins can read their own doc, super admin can read all
+      allow read: if isSuperAdmin() || (isLoggedIn() && request.auth.uid == adminId);
+      
+      // Only Super Admin can manage admins
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    // CLASSES
+    match /classes/{classId} {
+      allow read: if true; 
+      allow create: if isAuthorizedForMadrasa(request.resource.data.madrasaId);
+      allow update, delete: if isAuthorizedForMadrasa(resource.data.madrasaId);
+    }
+
+    // STUDENTS
+    match /students/{studentId} {
+      allow read: if true; 
+      allow create: if isAuthorizedForMadrasa(request.resource.data.madrasaId);
+      allow update, delete: if isAuthorizedForMadrasa(resource.data.madrasaId);
+    }
+
+    // SUBJECTS
+    match /subjects/{subjectId} {
+      allow read: if true; 
+      allow create: if isAuthorizedForMadrasa(request.resource.data.madrasaId);
+      allow update, delete: if isAuthorizedForMadrasa(resource.data.madrasaId);
+    }
+
+    // BOOKS
+    match /books/{bookId} {
+      allow read: if true; 
+      allow create: if isAuthorizedForMadrasa(request.resource.data.madrasaId);
+      allow update, delete: if isAuthorizedForMadrasa(resource.data.madrasaId);
+    }
+
+    // RECORDS (PRAYER TRACKING)
+    match /records/{recordId} {
+      // PUBLIC ACCESS: read
+      // AUTH UPDATE: Students don't log in, so anyone can create a tracker record
+      allow read: if true; 
+      allow create: if true;
+      
+      // Only Admins can modify/delete records
+      allow update, delete: if isAuthorizedForMadrasa(resource.data.madrasaId);
+    }
+  }
+}

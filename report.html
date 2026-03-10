@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Report - Madrasa Tracker</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- html2canvas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <style>
+        body {
+            padding-bottom: 90px;
+        }
+
+        .report-card-bg {
+            background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+            color: white;
+            border-radius: 1rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .report-card-bg::before {
+            content: '';
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 50%;
+            top: -50px;
+            right: -50px;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+    </style>
+</head>
+
+<body class="bg-light">
+
+    <!-- Header -->
+    <div class="app-header shadow-sm position-sticky top-0 z-3 d-flex justify-content-between align-items-center">
+        <div>
+            <h1 class="mb-1 fw-bold"><i class="bi bi-file-earmark-bar-graph-fill text-accent me-2"></i>Report</h1>
+            <p class="app-header-subtitle mb-0 fw-medium">Student Analytics</p>
+        </div>
+        <a href="home.html" class="btn btn-light rounded-circle shadow-sm"
+            style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+            <i class="bi bi-arrow-left text-primary"></i>
+        </a>
+    </div>
+
+    <div class="container mb-5 pb-5 mt-4">
+
+        <div id="loadingIndicator" class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2 fw-bold text-muted">Loading Report...</p>
+        </div>
+
+        <div id="reportContent" class="d-none">
+
+            <!-- Controls -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div class="bg-white rounded-pill p-1 shadow-sm d-inline-flex border border-light">
+                    <button id="btnWeekly"
+                        class="btn btn-sm rounded-pill active bg-primary text-white shadow-sm px-3 fw-bold">Weekly</button>
+                    <button id="btnMonthly"
+                        class="btn btn-sm rounded-pill text-muted px-3 fw-bold border-0">Monthly</button>
+                </div>
+                <button id="btnDownload" class="btn btn-success rounded-pill fw-bold shadow-sm px-3">
+                    <i class="bi bi-download me-1"></i> Save Image
+                </button>
+            </div>
+
+            <!-- The Report Card (Target for html2canvas) -->
+            <div id="captureArea" class="p-2 mb-4">
+                <div class="card border-0 shadow-lg report-card-bg p-4 mb-3">
+                    <div class="d-flex align-items-center gap-3 mb-4 position-relative z-1">
+                        <div class="avatar bg-white text-primary rounded-circle d-flex align-items-center justify-content-center fw-bold shadow"
+                            style="width: 65px; height: 65px; font-size: 1.8rem;" id="rAvatar">
+                            ?
+                        </div>
+                        <div>
+                            <h3 class="mb-0 fw-bold" id="rName">Student Name</h3>
+                            <p class="mb-0 opacity-75 fw-bold" id="rClass">Class Name</p>
+                            <p class="mb-0 small opacity-75 fw-bold mt-1" id="rTimeframe">Last 7 Days</p>
+                        </div>
+                    </div>
+
+                    <div class="row text-center position-relative z-1 mb-3">
+                        <div class="col-6 border-end border-light border-opacity-25">
+                            <h2 class="mb-0 fw-bold text-warning" id="rPoints">0</h2>
+                            <p class="mb-0 small opacity-75 text-uppercase fw-bold">Points Earned</p>
+                        </div>
+                        <div class="col-6">
+                            <h2 class="mb-0 fw-bold text-info" id="rSalawat">0</h2>
+                            <p class="mb-0 small opacity-75 text-uppercase fw-bold">Total Salawat</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-white bg-opacity-10 rounded-3 p-3 position-relative z-1">
+                        <div class="row text-center small fw-bold">
+                            <div class="col-4">
+                                <div class="text-success mb-1"><i class="bi bi-people-fill fs-5"></i></div>
+                                <div id="rJamaath">0</div>
+                                <div class="opacity-75" style="font-size: 0.7rem;">Jamaath</div>
+                            </div>
+                            <div class="col-4 border-start border-end border-light border-opacity-25">
+                                <div class="text-warning mb-1"><i class="bi bi-person-fill fs-5"></i></div>
+                                <div id="rIndiv">0</div>
+                                <div class="opacity-75" style="font-size: 0.7rem;">Individual</div>
+                            </div>
+                            <div class="col-4">
+                                <div class="text-info mb-1"><i class="bi bi-journal-check fs-5"></i></div>
+                                <div id="rSubjects">0</div>
+                                <div class="opacity-75" style="font-size: 0.7rem;">Subjects</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Progress Graph -->
+            <div class="card mb-4 shadow-sm border-0 rounded-4 p-3 bg-white">
+                <h6 class="fw-bold mb-3 text-dark"><i class="bi bi-graph-up text-primary me-2 fs-5"></i>Progress Graph
+                </h6>
+                <div class="chart-container">
+                    <canvas id="progressChart"></canvas>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Bottom Nav injected via JS -->
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script type="module" src="js/report.js"></script>
+</body>
+
+</html>

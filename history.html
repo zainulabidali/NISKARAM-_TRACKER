@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>History - Madrasa Tracker</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        body {
+            padding-bottom: 90px;
+        }
+    </style>
+</head>
+
+<body class="bg-light">
+
+    <div class="app-header shadow-sm position-sticky top-0 z-3">
+        <div>
+            <h1 class="mb-1 fw-bold"><i class="bi bi-clock-history text-accent me-2"></i>History</h1>
+            <p class="app-header-subtitle mb-0 fw-medium">View Past Records</p>
+        </div>
+    </div>
+
+    <div class="container mb-5 pb-5 mt-4">
+
+        <!-- Filters -->
+        <div class="card mb-4 shadow-sm border-0 rounded-4 p-4">
+            <div class="row g-2">
+                <div class="col-12 col-md-4">
+                    <select id="classFilter" class="form-select bg-light border-0 shadow-sm text-dark fw-bold">
+                        <option value="all">All Classes</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-4">
+                    <select id="studentFilter" class="form-select bg-light border-0 shadow-sm text-dark fw-bold">
+                        <option value="all">All Students</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-4">
+                    <input type="date" id="dateFilter"
+                        class="form-control bg-light border-0 shadow-sm text-dark fw-bold">
+                </div>
+            </div>
+        </div>
+
+        <!-- Records List -->
+        <div id="recordsContainer" class="d-flex flex-column gap-3">
+            <div class="text-center py-4">
+                <div class="spinner-border text-primary"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script type="module" src="js/history.js"></script>
+</body>
+
+</html>

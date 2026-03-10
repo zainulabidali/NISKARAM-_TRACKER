@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Admin - Madrasa Tracker</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        body {
+            padding-bottom: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="app-header position-sticky top-0 shadow-sm z-3">
+        <h1><i class="bi bi-shield-lock-fill"></i> Super Admin</h1>
+        <button id="logoutBtn" class="btn btn-sm btn-outline-light rounded-pill px-3">Logout</button>
+    </div>
+
+    <div class="container mt-4 mb-5 pb-5">
+
+        <div class="card mb-4 p-4 shadow-sm border-0 rounded-4">
+            <h5 class="text-primary mb-3 fw-bold"><i class="bi bi-building-add me-2"></i>Create New Madrasa</h5>
+            <form id="createMadrasaForm">
+                <div class="mb-3">
+                    <input type="text" id="mName" class="form-control bg-light border-0" placeholder="Madrasa Name"
+                        required>
+                </div>
+                <div class="mb-3">
+                    <input type="email" id="mEmail" class="form-control bg-light border-0" placeholder="Admin Email"
+                        required>
+                </div>
+                <div class="mb-3">
+                    <input type="password" id="mPassword" class="form-control bg-light border-0"
+                        placeholder="Admin Password" required minlength="6">
+                </div>
+                <div class="mb-4">
+                    <label class="form-label text-muted small fw-bold">Start Date</label>
+                    <input type="date" id="mStartDate" class="form-control bg-light border-0" required>
+                </div>
+                <div class="mb-4">
+                    <label class="form-label text-muted small fw-bold">Validity (Days)</label>
+                    <input type="number" id="mValidity" min="1" class="form-control bg-light border-0"
+                        placeholder="e.g. 30" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100 py-2 rounded-pill fw-bold shadow-sm" id="createBtn">
+                    Create Madrasa & Admin
+                </button>
+            </form>
+        </div>
+
+        <h5 class="text-primary mb-3 fw-bold d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-buildings me-2"></i>Existing Madrasas</span>
+            <button class="btn btn-sm btn-light" id="refreshBtn"><i class="bi bi-arrow-clockwise"></i></button>
+        </h5>
+
+        <div id="madrasasList" class="d-flex flex-column gap-3">
+            <div class="text-center py-4">
+                <div class="spinner-border text-primary" role="status"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Edit Madrasa Modal -->
+    <div class="modal fade" id="editMadrasaModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 rounded-4 shadow">
+                <div class="modal-header bg-primary text-white border-0 rounded-top-4">
+                    <h5 class="modal-title fw-bold">Edit Madrasa</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <input type="hidden" id="editMadrasaId">
+                    <label class="form-label text-muted fw-bold small">Madrasa Name</label>
+                    <input type="text" id="editMadrasaName" class="form-control bg-light border-0 mb-3" required>
+                    <button class="btn btn-primary w-100 rounded-pill py-2 fw-bold" id="saveMadrasaEditBtn">Save
+                        Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- View Admin Modal -->
+    <div class="modal fade" id="viewAdminModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 rounded-4 shadow">
+                <div class="modal-header bg-accent text-white border-0 rounded-top-4">
+                    <h5 class="modal-title fw-bold">Admin Details</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4 text-center">
+                    <div class="avatar bg-primary text-white mx-auto rounded-circle d-flex align-items-center justify-content-center shadow-sm mb-3"
+                        style="width: 60px; height: 60px; font-size: 1.5rem;" id="adminInitial">
+                        <i class="bi bi-person"></i>
+                    </div>
+                    <h5 class="fw-bold mb-1" id="adminEmailDisplay">Loading...</h5>
+                    <p class="text-muted small fw-bold mb-4">Madrasa Admin</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script type="module" src="js/superadmin.js"></script>
+</body>
+
+</html>

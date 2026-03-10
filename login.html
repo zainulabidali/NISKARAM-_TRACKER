@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Madrasa Tracker</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: var(--primary-green);
+        }
+
+        .login-card {
+            width: 100%;
+            max-width: 400px;
+            padding: 30px;
+            border-radius: 16px;
+            margin: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="card login-card shadow-lg">
+        <div class="text-center mb-4">
+            <h3 class="text-primary fw-bold" style="letter-spacing: -0.5px;">Madrasa Tracker</h3>
+            <p class="text-muted small">Sign in to your account</p>
+        </div>
+        <form id="loginForm">
+            <div class="mb-3">
+                <label class="form-label text-muted small fw-bold">Email Address</label>
+                <input type="email" class="form-control" id="email" required placeholder="admin@madrasa.com">
+            </div>
+            <div class="mb-4">
+                <label class="form-label text-muted small fw-bold">Password</label>
+                <input type="password" class="form-control" id="password" required placeholder="••••••••">
+            </div>
+            <button type="submit" class="btn btn-primary w-100 py-2" id="loginBtn">Login</button>
+            <div id="errorMsg" class="text-danger mt-3 text-center d-none small"></div>
+        </form>
+    </div>
+
+    <script type="module">
+        import { auth, db } from './js/firebase.js';
+        import { signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-auth.js';
+        import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js';
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const errorMsg = document.getElementById('errorMsg');
+            const loginBtn = document.getElementById('loginBtn');
+
+            loginBtn.disabled = true;
+            loginBtn.innerText = 'Logging in...';
+            errorMsg.classList.add('d-none');
+
+            try {
+                const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                const user = userCredential.user;
+
+                // SUPER ADMIN UID CHECK
+                if (user.uid === 'mt0k0d3UeAgcB8RTzq5k3M97UKa2') {
+                    window.location.href = 'superadmin.html';
+                    return;
+                }
+
+                // Fetch role for Madrasa Admin
+                const adminDoc = await getDoc(doc(db, "admins", user.uid));
+                if (adminDoc.exists()) {
+                    window.location.href = 'admin.html'; // Madrasa Admins go to Settings Panel directly
+                } else {
+                    // Normal user without an admin doc
+                    await signOut(auth);
+                    throw new Error("Access Denied: You do not have admin privileges.");
+                }
+            } catch (error) {
+                errorMsg.innerText = error.message;
+                errorMsg.classList.remove('d-none');
+                loginBtn.disabled = false;
+                loginBtn.innerText = 'Login';
+            }
+        });
+    </script>
+</body>
+
+</html>

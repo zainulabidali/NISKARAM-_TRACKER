@@ -1,0 +1,228 @@
+import { db } from './firebase.js';
+import { injectBottomNav } from './app.js';
+import { collection, query, where, getDocs, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js';
+
+let madrasaId = null;
+let allStudents = {};
+let allRecords = [];
+
+// Initialize Today's Date
+const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+document.getElementById('todayDate').innerText = new Date().toLocaleDateString('en-US', options);
+
+document.addEventListener('DOMContentLoaded', async () => {
+    injectBottomNav('home');
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const mParam = urlParams.get('m');
+
+    if (mParam) {
+        localStorage.setItem('activeMadrasaId', mParam);
+        madrasaId = mParam;
+        window.history.replaceState({}, document.title, window.location.pathname);
+    } else {
+        madrasaId = localStorage.getItem('activeMadrasaId');
+    }
+
+    if (!madrasaId) {
+        document.getElementById('madrasaNameDisplay').innerText = 'Madrasa Niskaram Tracker';
+        ['todayList', 'weeklyList', 'monthlyList'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.innerHTML = `
+                  <div class="text-center py-5">
+                    <i class="bi bi-person-lock display-4 text-muted opacity-50 mb-3"></i>
+                    <p class="text-muted fw-bold">No Madrasa selected.<br>
+                       Please use the link provided by your admin.</p>
+                  </div>`;
+            }
+        });
+        return;
+    }
+
+    // Load Madrasa Name
+    const docSnap = await getDoc(doc(db, "madrasas", madrasaId));
+    if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.status !== 'active') {
+            document.getElementById('madrasaNameDisplay').innerText = "Inactive Madrasa";
+            return;
+        }
+        document.getElementById('madrasaNameDisplay').innerText = data.name;
+    } else {
+        localStorage.removeItem('activeMadrasaId');
+        document.getElementById('madrasaNameDisplay').innerText = "Madrasa Not Found";
+        return;
+    }
+
+    await loadClasses();
+    await loadData();
+    renderLeaderboards();
+});
+
+async function loadClasses() {
+    const classFilter = document.getElementById('classFilter');
+    const q = query(collection(db, "classes"), where("madrasaId", "==", madrasaId));
+    const snap = await getDocs(q);
+    snap.forEach(d => {
+        classFilter.innerHTML += `<option value="${d.id}">${d.data().name}</option>`;
+    });
+
+    classFilter.addEventListener('change', renderLeaderboards);
+}
+
+async function loadData() {
+    // Load Students
+    const stuQ = query(collection(db, "students"), where("madrasaId", "==", madrasaId));
+    const stuSnap = await getDocs(stuQ);
+    stuSnap.forEach(d => {
+        allStudents[d.id] = { ...d.data(), id: d.id };
+    });
+
+    // Calculate Date Boundaries
+    const todayRaw = new Date();
+    const offset = todayRaw.getTimezoneOffset() * 60000;
+    const localDate = new Date(todayRaw.getTime() - offset);
+    const todayStr = localDate.toISOString().split('T')[0];
+
+    const weeklyBound = new Date(localDate);
+    weeklyBound.setDate(localDate.getDate() - 7);
+    const weeklyBoundStr = weeklyBound.toISOString().split('T')[0];
+
+    const monthlyBound = new Date(localDate);
+    monthlyBound.setDate(localDate.getDate() - 30);
+    const monthlyBoundStr = monthlyBound.toISOString().split('T')[0];
+
+    try {
+        const recQ = query(collection(db, "records"),
+            where("madrasaId", "==", madrasaId));
+
+        const recSnap = await getDocs(recQ);
+        allRecords = [];
+        recSnap.forEach(d => {
+            if (d.data().date >= monthlyBoundStr) {
+                allRecords.push(d.data());
+            }
+        });
+    } catch (err) {
+        console.error("Failed to load records from Firestore", err);
+        allRecords = [];
+    }
+
+    // Merge offline / unsynced records to show on leaderboard immediately
+    const offlineRecords = JSON.parse(localStorage.getItem('trackerData') || '[]');
+    offlineRecords.forEach(offRec => {
+        if (offRec.madrasaId === madrasaId && offRec.date >= monthlyBoundStr) {
+            // Check if this record is already in allRecords (to avoid double counting if fetch was fast)
+            const id = offRec._id || `${offRec.studentId}_${offRec.date}`;
+            const existingIdx = allRecords.findIndex(r => r._id === id || (r.studentId === offRec.studentId && r.date === offRec.date));
+            if (existingIdx >= 0) {
+                // overwrite with the freshest offline change
+                allRecords[existingIdx] = offRec;
+            } else {
+                allRecords.push(offRec);
+            }
+        }
+    });
+
+    window.todayStrGlobal = todayStr;
+    window.weeklyBoundStrGlobal = weeklyBoundStr;
+}
+
+function renderLeaderboards() {
+    const classFilter = document.getElementById('classFilter').value;
+    const todayStr = window.todayStrGlobal;
+    const weeklyBoundStr = window.weeklyBoundStrGlobal;
+
+    let scoresToday = {};
+    let scoresWeekly = {};
+    let scoresMonthly = {};
+    let salawatToday = {};
+    let salawatWeekly = {};
+    let salawatMonthly = {};
+
+    Object.keys(allStudents).forEach(sId => {
+        if (classFilter === 'all' || allStudents[sId].classId === classFilter) {
+            scoresToday[sId] = 0;
+            scoresWeekly[sId] = 0;
+            scoresMonthly[sId] = 0;
+            salawatToday[sId] = 0;
+            salawatWeekly[sId] = 0;
+            salawatMonthly[sId] = 0;
+        }
+    });
+
+    allRecords.forEach(r => {
+        const sId = r.studentId;
+        if (scoresMonthly[sId] !== undefined) {
+            const score = Number(r.totalScore) || 0;
+            const salawat = Number(r.salawatCount) || 0;
+            scoresMonthly[sId] += score;
+            salawatMonthly[sId] = (salawatMonthly[sId] || 0) + salawat;
+            if (r.date >= weeklyBoundStr) {
+                scoresWeekly[sId] += score;
+                salawatWeekly[sId] = (salawatWeekly[sId] || 0) + salawat;
+            }
+            if (r.date === todayStr) {
+                scoresToday[sId] += score;
+                salawatToday[sId] = (salawatToday[sId] || 0) + salawat;
+            }
+        }
+    });
+
+    const generateHTML = (scoresObj, salawatObj) => {
+        const sorted = Object.keys(scoresObj)
+            .filter(id => scoresObj[id] > 0 || (salawatObj[id] || 0) > 0)
+            .map(id => ({ id, score: scoresObj[id], salawat: salawatObj[id] || 0, name: allStudents[id].name }))
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 10);
+
+        if (sorted.length === 0) {
+            return `
+        <div class="text-center py-5">
+           <i class="bi bi-box2 display-4 text-muted opacity-50 mb-3"></i>
+           <p class="text-muted fw-bold">No records found yet.</p>
+        </div>
+      `;
+        }
+
+        // Summary bar
+        const totalPts = sorted.reduce((s, x) => s + x.score, 0);
+        const totalSalawat = sorted.reduce((s, x) => s + x.salawat, 0);
+        const summaryBar = `
+          <div class="d-flex justify-content-between align-items-center px-3 py-2 mb-2 rounded-3"
+               style="background:linear-gradient(90deg,#f0fdf4,#f5f3ff); border:1px solid #e5e7eb;">
+            <span class="fw-bold text-primary small"><i class="bi bi-trophy-fill me-1 text-warning"></i>${Math.round(totalPts)} Total Pts</span>
+            <span class="fw-bold small" style="color:#7c3aed;">📿 ${totalSalawat} Salawat</span>
+          </div>`;
+
+        return summaryBar + sorted.map((s, index) => {
+            let medal = '';
+            let bgClass = 'bg-transparent';
+            let borderClass = 'border-bottom border-light';
+
+            if (index === 0) { medal = '🥇 '; bgClass = 'bg-warning bg-opacity-10'; borderClass = 'border border-warning'; }
+            else if (index === 1) { medal = '🥈 '; bgClass = 'bg-secondary bg-opacity-10'; }
+            else if (index === 2) { medal = '🥉 '; bgClass = 'bg-danger bg-opacity-10'; }
+
+            return `
+      <a href="report.html?s=${s.id}" class="text-decoration-none">
+          <li class="list-group-item d-flex justify-content-between align-items-center py-3 px-3 rounded-4 mb-2 ${bgClass} ${borderClass} shadow-sm profile-hover-card transition-all">
+            <div class="d-flex align-items-center gap-3">
+              <span class="fs-6 fw-bold text-muted" style="width: 24px; text-align: center;">${index + 1}</span>
+              <div class="avatar bg-white shadow-sm text-primary fw-bold text-center rounded-circle d-flex align-items-center justify-content-center" style="width:45px;height:45px; font-size:1.1rem;">
+                 ${s.name.charAt(0).toUpperCase()}
+              </div>
+              <span class="fw-bold text-dark fs-6">${medal}${s.name}</span>
+            </div>
+            <span class="badge bg-primary rounded-pill py-2 px-3 fw-bold shadow-sm fs-6">${s.score} pts</span>
+          </li>
+      </a>
+    `;
+        }).join('');
+    };
+
+    document.getElementById('todayList').innerHTML = generateHTML(scoresToday, salawatToday);
+    document.getElementById('weeklyList').innerHTML = generateHTML(scoresWeekly, salawatWeekly);
+    document.getElementById('monthlyList').innerHTML = generateHTML(scoresMonthly, salawatMonthly);
+}
