@@ -43,43 +43,104 @@
     <div class="app-header shadow-sm position-sticky top-0 z-3">
         <h1><i class="bi bi-gear-wide-connected"></i> Ustad Settings</h1>
         <div class="d-flex gap-2">
-            <a href="#" class="btn btn-sm btn-outline-light rounded-pill px-3" id="madrasaLinkBtn">Get Link</a>
-            <button class="btn btn-sm btn-danger rounded-pill px-3" id="logoutBtn">Logout</button>
+            <button class="btn btn-sm btn-danger rounded-pill px-3 fw-bold" id="logoutBtn">Logout</button>
         </div>
     </div>
 
     <div class="container mb-5 pb-5 mt-3">
 
-        <!-- Tab Navigation -->
-        <ul class="nav nav-tabs mb-4 px-2" id="settingsTabs" role="tablist">
-            <li class="nav-item" role="presentation">
-                <button class="nav-link active shadow-sm" id="classes-tab" data-bs-toggle="tab"
-                    data-bs-target="#classes" type="button" role="tab">Classes</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link shadow-sm" id="students-tab" data-bs-toggle="tab" data-bs-target="#students"
-                    type="button" role="tab">Students</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link shadow-sm" id="subjects-tab" data-bs-toggle="tab" data-bs-target="#subjects"
-                    type="button" role="tab">Subjects</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link shadow-sm" id="books-tab" data-bs-toggle="tab" data-bs-target="#books"
-                    type="button" role="tab" style="white-space:nowrap;">Books (Opt)</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link shadow-sm" id="records-tab" data-bs-toggle="tab" data-bs-target="#records"
-                    type="button" role="tab">Records</button>
-            </li>
-        </ul>
-        </ul>
+        <!-- Dashboard Home Grid -->
+        <div id="adminDashboardGrid" class="row g-3">
+            
+            <div class="col-6 col-md-4">
+                <div class="card h-100 border-0 shadow-sm rounded-4 profile-hover-card" style="cursor: pointer;" onclick="openAdminModule('classes')">
+                    <div class="card-body text-center p-4">
+                        <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
+                            <i class="bi bi-easel fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold mb-1">Classes</h6>
+                        <small class="text-muted d-none d-md-block">Manage madrasa classes</small>
+                    </div>
+                </div>
+            </div>
 
-        <!-- Tab Content -->
-        <div class="tab-content" id="settingsTabsContent">
+            <div class="col-6 col-md-4">
+                <div class="card h-100 border-0 shadow-sm rounded-4 profile-hover-card" style="cursor: pointer;" onclick="openAdminModule('students')">
+                    <div class="card-body text-center p-4">
+                        <div class="bg-success bg-opacity-10 text-success rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
+                            <i class="bi bi-people fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold mb-1">Students</h6>
+                        <small class="text-muted d-none d-md-block">Add and manage students</small>
+                    </div>
+                </div>
+            </div>
 
-            <!-- CLASSES TAB -->
-            <div class="tab-pane fade show active" id="classes" role="tabpanel">
+            <div class="col-6 col-md-4">
+                <div class="card h-100 border-0 shadow-sm rounded-4 profile-hover-card" style="cursor: pointer;" onclick="openAdminModule('subjects')">
+                    <div class="card-body text-center p-4">
+                        <div class="bg-warning bg-opacity-10 text-warning rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
+                            <i class="bi bi-journal-bookmark fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold mb-1">Subjects</h6>
+                        <small class="text-muted d-none d-md-block">Manage study subjects</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- <div class="col-6 col-md-4">
+                <div class="card h-100 border-0 shadow-sm rounded-4 profile-hover-card" style="cursor: pointer;" onclick="openAdminModule('books')">
+                    <div class="card-body text-center p-4">
+                        <div class="bg-info bg-opacity-10 text-info rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
+                            <i class="bi bi-book fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold mb-1">Books</h6>
+                        <small class="text-muted d-none d-md-block">Manage study books</small>
+                    </div>
+                </div>
+            </div> -->
+
+            <div class="col-6 col-md-4">
+                <div class="card h-100 border-0 shadow-sm rounded-4 profile-hover-card" style="cursor: pointer;" onclick="openAdminModule('records')">
+                    <div class="card-body text-center p-4">
+                        <div class="bg-danger bg-opacity-10 text-danger rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
+                            <i class="bi bi-card-checklist fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold mb-1">Records</h6>
+                        <small class="text-muted d-none d-md-block">Track activity logs</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Madrasa Link Widget -->
+            <div class="col-12 mt-4">
+                <div class="card border-0 shadow-sm rounded-4 bg-white overflow-hidden">
+                    <div class="card-header bg-transparent border-0 pt-4 pb-0 px-4">
+                        <h6 class="fw-bold text-dark mb-0"><i class="bi bi-link-45deg text-primary me-2"></i>Madrasa Access Link</h6>
+                        <small class="text-muted">Share this link with your madrasa teachers and students to login.</small>
+                    </div>
+                    <div class="card-body px-4 pb-4 pt-3">
+                        <div class="d-flex flex-column flex-md-row gap-2">
+                            <div class="flex-grow-1 bg-light border-0 rounded-3 py-2 px-3 fw-bold text-primary d-flex align-items-center" style="word-break: break-all;" id="madrasaLinkTextContainer">
+                                Loading link...
+                            </div>
+                            <button class="btn btn-primary fw-bold shadow-sm rounded-pill px-4 align-self-start align-self-md-stretch" id="btnCopyMadrasaLink">
+                                <i class="bi bi-clipboard me-1"></i> Copy Link
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modules Container -->
+        <div id="adminModulesContainer">
+
+            <!-- CLASSES MODULE -->
+            <div class="admin-module-pane d-none" id="classes">
+                <button class="btn btn-sm btn-light border text-muted shadow-sm fw-bold mb-3 px-3 py-2 rounded-pill" onclick="closeAdminModule()">
+                    <i class="bi bi-arrow-left me-1"></i> Back to Dashboard
+                </button>
                 <div class="card p-4 shadow-sm rounded-4 border-0">
                     <h5 class="text-primary fw-bold mb-3"><i class="bi bi-easel me-2"></i>Classes</h5>
                     <form id="addClassForm" class="d-flex gap-2 mb-3">
@@ -96,8 +157,11 @@
                 </div>
             </div>
 
-            <!-- STUDENTS TAB -->
-            <div class="tab-pane fade" id="students" role="tabpanel">
+            <!-- STUDENTS MODULE -->
+            <div class="admin-module-pane d-none" id="students">
+                <button class="btn btn-sm btn-light border text-muted shadow-sm fw-bold mb-3 px-3 py-2 rounded-pill" onclick="closeAdminModule()">
+                    <i class="bi bi-arrow-left me-1"></i> Back to Dashboard
+                </button>
                 <div class="card p-4 shadow-sm rounded-4 border-0">
                     <h5 class="text-primary fw-bold mb-3"><i class="bi bi-people me-2"></i>Students</h5>
                     <form id="addStudentForm" class="mb-3">
@@ -116,22 +180,41 @@
                 </div>
             </div>
 
-            <!-- SUBJECTS TAB -->
-            <div class="tab-pane fade" id="subjects" role="tabpanel">
+            <!-- SUBJECTS MODULE -->
+            <div class="admin-module-pane d-none" id="subjects">
+                <button class="btn btn-sm btn-light border text-muted shadow-sm fw-bold mb-3 px-3 py-2 rounded-pill" onclick="closeAdminModule()">
+                    <i class="bi bi-arrow-left me-1"></i> Back to Dashboard
+                </button>
                 <div class="card p-4 shadow-sm rounded-4 border-0">
                     <h5 class="text-primary fw-bold mb-3"><i class="bi bi-journal-bookmark me-2"></i>Subjects</h5>
-                    <form id="addSubjectForm" class="d-flex gap-2 mb-3">
-                        <input type="text" id="subjectName" class="form-control bg-light border-0"
-                            placeholder="e.g., Quran" required>
-                        <button type="submit" class="btn btn-primary px-3 shadow-sm rounded-pill"><i
-                                class="bi bi-plus-lg"></i> Add</button>
+                    
+                    <div class="mb-3">
+                        <label class="form-label text-muted fw-bold small">Filter by Class</label>
+                        <select id="subjectClassFilter" class="form-select bg-light border-0 shadow-sm text-dark fw-bold rounded-3 py-2">
+                            <option value="all">All Classes</option>
+                        </select>
+                    </div>
+
+                    <form id="addSubjectForm" class="mb-3 mt-3 pt-3 border-top">
+                        <div class="mb-2">
+                            <input type="text" id="subjectName" class="form-control bg-light border-0" placeholder="e.g., Quran" required>
+                        </div>
+                        <div class="d-flex gap-2 mt-3">
+                            <select id="subjectClass" class="form-select bg-light border-0" required>
+                                <option value="">Select Class</option>
+                            </select>
+                            <button type="submit" class="btn btn-primary px-4 shadow-sm rounded-pill"><i class="bi bi-plus-lg"></i> Add</button>
+                        </div>
                     </form>
-                    <ul class="list-group list-group-flush" id="subjectsList"></ul>
+                    <ul class="list-group list-group-flush gap-2" id="subjectsList"></ul>
                 </div>
             </div>
 
-            <!-- BOOKS TAB -->
-            <div class="tab-pane fade" id="books" role="tabpanel">
+            <!-- BOOKS MODULE -->
+            <div class="admin-module-pane d-none" id="books">
+                <button class="btn btn-sm btn-light border text-muted shadow-sm fw-bold mb-3 px-3 py-2 rounded-pill" onclick="closeAdminModule()">
+                    <i class="bi bi-arrow-left me-1"></i> Back to Dashboard
+                </button>
                 <div class="card p-4 shadow-sm rounded-4 border-0">
                     <h5 class="text-primary fw-bold mb-3"><i class="bi bi-book me-2"></i>Books</h5>
                     <form id="addBookForm" class="d-flex gap-2 mb-3">
@@ -144,21 +227,72 @@
                 </div>
             </div>
 
-            <!-- RECORDS TAB -->
-            <div class="tab-pane fade" id="records" role="tabpanel">
+            <!-- RECORDS MODULE -->
+            <div class="admin-module-pane d-none" id="records">
+                <button class="btn btn-sm btn-light border text-muted shadow-sm fw-bold mb-3 px-3 py-2 rounded-pill d-none" id="btnBackToDashboardFromRecords" onclick="closeAdminModule()">
+                    <i class="bi bi-arrow-left me-1"></i> Back to Dashboard
+                </button>
                 <div class="card p-4 shadow-sm rounded-4 border-0">
-                    <h5 class="text-primary fw-bold mb-3"><i class="bi bi-card-checklist me-2"></i>Manage Records</h5>
-                    <div class="mb-3 d-flex gap-2">
-                        <select id="recordStudentFilter" class="form-select bg-light border-0">
-                            <option value="">All Students</option>
-                        </select>
-                        <input type="date" id="recordDateFilter" class="form-control bg-light border-0">
-                        <button class="btn btn-primary rounded-pill shadow-sm px-3" id="loadRecordsBtn"><i
-                                class="bi bi-search"></i></button>
+                    <h5 class="text-primary fw-bold mb-3 d-flex align-items-center justify-content-between">
+                        <span><i class="bi bi-card-checklist me-2"></i>Manage Records</span>
+                    </h5>
+
+                    <!-- VIEW A: Student List View -->
+                    <div id="recordsListView">
+                        <div class="mb-3">
+                            <label class="form-label text-muted fw-bold small">Filter by Class</label>
+                            <select id="recordClassFilter" class="form-select bg-light border-0 shadow-sm text-dark fw-bold rounded-3 py-2">
+                                <option value="all">All Classes</option>
+                            </select>
+                        </div>
+                        <div id="recordsStudentList" class="d-flex flex-column gap-2 mt-3">
+                            <!-- Populated with student cards -->
+                        </div>
                     </div>
-                    <div id="recordsAdminList" class="d-flex flex-column gap-2">
-                        <p class="text-muted small">Select a student or date to view records.</p>
+
+                    <!-- VIEW B: Student History View -->
+                    <div id="recordsHistoryView" class="d-none">
+                        <button class="btn btn-sm btn-light border text-muted shadow-sm fw-bold mb-3 px-3 py-2 rounded-pill" id="btnBackToStudents">
+                            <i class="bi bi-arrow-left me-1"></i> Back to Students
+                        </button>
+                        
+                        <div class="d-flex align-items-center gap-3 mb-4 p-3 bg-light rounded-4 border shadow-sm">
+                            <div class="avatar bg-white text-primary fw-bold text-center rounded-circle d-flex align-items-center justify-content-center shadow-sm" style="width:50px;height:50px; font-size:1.5rem;" id="historyStudentAvatar">
+                                ?
+                            </div>
+                            <div>
+                                <h5 class="fw-bold mb-0 text-dark" id="historyStudentName">Student Name</h5>
+                                <span class="badge bg-white text-muted border shadow-sm mt-1" id="historyStudentClass">Class Name</span>
+                            </div>
+                        </div>
+
+                        <!-- Date Filter Pills -->
+                        <div class="d-flex gap-2 mb-3 align-items-center flex-wrap" id="adminDateFilters">
+                            <button class="btn btn-dark rounded-pill px-3 shadow-sm fw-bold admin-date-btn" data-filter="all" style="font-size:0.9rem;">All Time</button>
+                            <button class="btn btn-light rounded-pill px-3 shadow-sm fw-bold border admin-date-btn text-muted" data-filter="today" style="font-size:0.9rem;">Today</button>
+                            <button class="btn btn-light rounded-pill px-3 shadow-sm fw-bold border admin-date-btn text-muted" data-filter="yesterday" style="font-size:0.9rem;">Yesterday</button>
+                            <button class="btn btn-light rounded-pill px-3 shadow-sm fw-bold border admin-date-btn text-muted" data-filter="custom" style="font-size:0.9rem;">Custom <i class="bi bi-calendar3 ms-1"></i></button>
+                            <input type="date" id="adminCustomDate" class="form-control d-none shadow-sm border-0 bg-white text-primary rounded-pill px-3 py-1" style="width: auto; height: 32px; font-size:0.9rem; font-weight:bold;">
+                        </div>
+
+                        <!-- Bulk Action Controls -->
+                        <div id="bulkActionContainer" class="d-none align-items-center justify-content-between mb-3 bg-white p-3 rounded-4 border shadow-sm">
+                            <div class="form-check m-0 d-flex align-items-center gap-2">
+                                <input class="form-check-input mt-0" type="checkbox" id="selectAllRecordsCheckbox" style="width:1.2rem;height:1.2rem;cursor:pointer;">
+                                <label class="form-check-label fw-bold text-dark cursor-pointer m-0" for="selectAllRecordsCheckbox" style="cursor:pointer; padding-top:2px;">
+                                    Select All
+                                </label>
+                            </div>
+                            <button class="btn btn-danger fw-bold shadow-sm rounded-pill px-3 py-1 d-none" id="bulkDeleteBtn">
+                                <i class="bi bi-trash me-1"></i> Delete Selected
+                            </button>
+                        </div>
+
+                        <div id="recordsAdminList" class="d-flex flex-column gap-3">
+                            <p class="text-muted small">Loading records...</p>
+                        </div>
                     </div>
+
                 </div>
             </div>
 
@@ -183,7 +317,7 @@
                         <input type="text" id="editName" class="form-control bg-light border-0 mb-3">
                     </div>
 
-                    <div id="studentEditFields" class="d-none">
+                    <div id="classEditFields" class="d-none">
                         <label class="form-label text-muted fw-bold small">Class</label>
                         <select id="editClass" class="form-select bg-light border-0 mb-3"></select>
                     </div>

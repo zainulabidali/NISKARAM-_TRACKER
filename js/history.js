@@ -71,7 +71,13 @@ async function loadClassesAndStudents() {
 
 async function loadRecords() {
     const container = document.getElementById('recordsContainer');
-    container.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
+    container.innerHTML = `
+        <div class="text-center py-5 bg-white rounded-4 shadow-sm border border-light p-4">
+           <div class="spinner-border text-primary border-3" role="status" style="width: 3rem; height: 3rem;">
+               <span class="visually-hidden">Loading...</span>
+           </div>
+           <p class="text-muted fw-bold mt-3">Loading records...</p>
+        </div>`;
 
     const dateStr = document.getElementById('dateFilter').value;
     if (!dateStr) {
@@ -111,8 +117,8 @@ function renderRecords() {
     if (filtered.length === 0) {
         container.innerHTML = `
         <div class="text-center py-5 bg-white rounded-4 shadow-sm border border-light p-4">
-           <i class="bi bi-clock-history display-3 text-muted opacity-25 mb-3"></i>
-           <p class="text-muted fw-bold">No records found for this criteria.</p>
+           <div class="display-3 mb-3">⏳</div>
+           <p class="text-muted fw-bold">No records found for this date</p>
         </div>
       `;
         return;
@@ -122,33 +128,68 @@ function renderRecords() {
         const studentName = allStudents[r.studentId]?.name || 'Unknown Student';
         const className = allClasses[r.classId]?.name || 'Unknown Class';
 
-        const prayText = Object.keys(r.prayers).map(p => {
-            let col = r.prayers[p] === 'Jamaat' ? 'text-success border-success bg-success bg-opacity-10'
-                : r.prayers[p] === 'Individual' ? 'text-warning border-warning bg-warning bg-opacity-10' : 'text-danger border-danger bg-danger bg-opacity-10';
-            return `<span class="badge border me-1 mb-1 shadow-sm px-2 py-1 ${col}">${p}: ${r.prayers[p].charAt(0)}</span>`;
-        }).join('');
+        const rawPrayers = r.prayers || {};
+        const orderedPrayers = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+        
+        const emojiMap = {
+            fajr: '🌅 Fajr',
+            dhuhr: '☀️ Dhuhr',
+            asr: '🌤 Asr',
+            maghrib: '🌇 Maghrib',
+            isha: '🌙 Isha'
+        };
+
+        const prayText = orderedPrayers.map(p => {
+            if (!rawPrayers[p]) return '';
+            const status = rawPrayers[p];
+            let col = status === 'Jamaat' ? 'text-success bg-success bg-opacity-10'
+                : status === 'Individual' ? 'text-warning bg-warning bg-opacity-10 text-dark' : 'text-danger bg-danger bg-opacity-10';
+            const emojiName = emojiMap[p] || p;
+            return `<span class="badge rounded-pill fw-bold shadow-sm px-3 py-2 me-1 mb-2 ${col}">${emojiName}</span>`;
+        }).filter(html => html !== '').join('');
 
         let timeStr = 'Offline';
         if (r.timestamp) {
             timeStr = new Date(r.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         }
+        
+        const salawatCount = r.salawatCount || 0;
 
         return `
-        <div class="card shadow-sm border-0 rounded-4 p-3 bg-white">
-          <div class="d-flex justify-content-between align-items-center mb-2">
-             <div class="fw-bold fs-5 text-dark">${studentName}</div>
-             <span class="badge bg-primary rounded-pill py-2 px-3 fw-bold shadow-sm" style="font-size: 0.9rem;">${r.totalScore} pts</span>
-          </div>
-          <div class="badge bg-light text-dark fw-bold mb-3 d-inline-block p-2 shadow-sm border">${className}</div>
+        <div class="card shadow-sm border-0 rounded-4 p-4 bg-white mb-2">
           
-          <div class="d-flex flex-wrap border-bottom border-light pb-2 mb-2">
+          <div class="d-flex justify-content-between align-items-start mb-3">
+             <div class="d-flex align-items-center gap-3">
+                 <div class="avatar bg-light text-primary fw-bold text-center rounded-circle d-flex align-items-center justify-content-center shadow-sm" style="width:45px;height:45px; font-size:1.1rem; border: 2px solid #e9ecef;">
+                     ${studentName.charAt(0).toUpperCase()}
+                 </div>
+                 <div>
+                     <h6 class="fw-bold fs-5 text-dark mb-0">${studentName}</h6>
+                     <span class="badge bg-light text-muted fw-bold mt-1 border border-light shadow-sm">${className}</span>
+                 </div>
+             </div>
+             
+             <div class="badge rounded-pill py-2 px-3 fw-bold shadow-sm" style="background: linear-gradient(135deg, #22c55e, #16a34a); color: white; font-size: 0.9rem;">
+                 🏆 ${r.totalScore} pts
+             </div>
+          </div>
+          
+          <div class="d-flex flex-wrap border-bottom border-light pb-2 mb-3 mt-2">
              ${prayText}
           </div>
           
-          <div class="small fw-bold text-muted d-flex align-items-center mt-2">
-             <i class="bi bi-book-half me-1 text-accent"></i> Subjects Checked: <span class="ms-1 fs-6">${r.subjectScore}</span>
-             <span class="ms-auto text-muted opacity-50" style="font-size: 0.75rem;"><i class="bi bi-cloud-check me-1"></i>${timeStr}</span>
+          <div class="d-flex justify-content-between align-items-center">
+             <div class="d-flex gap-2">
+                 <div class="small fw-bold text-muted bg-light px-2 py-1 rounded-3 border-0 shadow-sm">
+                    📚 Subjects: <span class="text-accent ms-1">${r.subjectScore}</span>
+                 </div>
+                 <div class="small fw-bold text-muted bg-light px-2 py-1 rounded-3 border-0 shadow-sm">
+                    📿 Salawat: <span class="text-info ms-1">${salawatCount}</span>
+                 </div>
+             </div>
+             <span class="text-muted opacity-75 fw-bold" style="font-size: 0.75rem;"><i class="bi bi-cloud-check me-1"></i>Saved: ${timeStr}</span>
           </div>
+          
         </div>
       `;
     }).join('');

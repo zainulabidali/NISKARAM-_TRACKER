@@ -78,6 +78,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Initialize Modal setup if no student is selected yet
     setupSelectionModal();
+
+    // Bind View Report Button
+    const btnReport = document.getElementById('btnViewReport');
+    if (btnReport) {
+        btnReport.addEventListener('click', () => {
+            const sid = document.getElementById('studentSelect').value;
+            if (sid) {
+                window.location.href = `report.html?s=${sid}`;
+            } else {
+                alert("Please select a student first.");
+            }
+        });
+    }
 });
 
 let selectionModalInstance = null;
@@ -335,6 +348,18 @@ async function refreshStudentSummary(studentId) {
     let prayersToday = 0;
     let studyToday = 0;
 
+    // Reset all tracking states to Neutral/0 before loading
+    prayerSelections = { fajr: "", dhuhr: "", asr: "", maghrib: "", isha: "" };
+    
+    document.querySelectorAll('.subject-checkbox:checked, .book-checkbox:checked').forEach(cb => cb.checked = false);
+    
+    if (document.getElementById('salawatCount')) {
+        document.getElementById('salawatCount').value = 0;
+    }
+    if (document.getElementById('salawatDisplay')) {
+        document.getElementById('salawatDisplay').innerText = 0;
+    }
+
     const q = query(collection(db, "records"), where("studentId", "==", studentId));
     try {
         const snap = await getDocs(q);
@@ -354,6 +379,28 @@ async function refreshStudentSummary(studentId) {
                     prayerSelections.asr = r.prayers.asr || "";
                     prayerSelections.maghrib = r.prayers.maghrib || "";
                     prayerSelections.isha = r.prayers.isha || "";
+                }
+
+                // Update Subjects
+                if (r.subjects && r.subjects.length > 0) {
+                    r.subjects.forEach(subId => {
+                        const cb = document.getElementById(`subject_${subId}`);
+                        if (cb) cb.checked = true;
+                    });
+                }
+
+                // Update Books
+                if (r.books && r.books.length > 0) {
+                    r.books.forEach(bookId => {
+                        const cb = document.getElementById(`book_${bookId}`);
+                        if (cb) cb.checked = true;
+                    });
+                }
+
+                // Update Salawat
+                if (r.salawatCount !== undefined) {
+                    if (document.getElementById('salawatCount')) document.getElementById('salawatCount').value = r.salawatCount;
+                    if (document.getElementById('salawatDisplay')) document.getElementById('salawatDisplay').innerText = r.salawatCount;
                 }
             }
         });
@@ -555,22 +602,13 @@ document.getElementById('trackerForm').addEventListener('submit', async (e) => {
         try {
             await setDoc(doc(db, "records", recordId), record, { merge: true });
             alert("Record saved successfully!");
-            document.querySelectorAll('.subject-checkbox:checked, .book-checkbox:checked').forEach(cb => cb.checked = false);
-            document.getElementById('salawatCount').value = 0;
-            document.getElementById('salawatDisplay').innerText = 0;
-            // Retain the actual UI values post-save, or reset depending on view context?
-            // Actually, we should just let `refreshStudentSummary` reload it
-            renderPrayersForm();
+            // Refresh logic already clears out and sets proper values
             refreshStudentSummary(studentId);
         } catch (err) {
             alert("Error saving online. Saved locally: " + err.message);
         }
     } else {
         alert("Saved offline. Will sync when internet returns.");
-        document.querySelectorAll('.subject-checkbox:checked, .book-checkbox:checked').forEach(cb => cb.checked = false);
-        document.getElementById('salawatCount').value = 0;
-        document.getElementById('salawatDisplay').innerText = 0;
-        renderPrayersForm();
         refreshStudentSummary(studentId);
     }
 

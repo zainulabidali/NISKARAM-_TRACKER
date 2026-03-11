@@ -5,6 +5,7 @@ import { collection, query, where, getDocs, doc, getDoc } from 'https://www.gsta
 let madrasaId = null;
 let allStudents = {};
 let allRecords = [];
+let allClasses = {};
 
 // Initialize Today's Date
 const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
@@ -65,6 +66,7 @@ async function loadClasses() {
     const q = query(collection(db, "classes"), where("madrasaId", "==", madrasaId));
     const snap = await getDocs(q);
     snap.forEach(d => {
+        allClasses[d.id] = d.data().name;
         classFilter.innerHTML += `<option value="${d.id}">${d.data().name}</option>`;
     });
 
@@ -173,9 +175,15 @@ function renderLeaderboards() {
     const generateHTML = (scoresObj, salawatObj) => {
         const sorted = Object.keys(scoresObj)
             .filter(id => scoresObj[id] > 0 || (salawatObj[id] || 0) > 0)
-            .map(id => ({ id, score: scoresObj[id], salawat: salawatObj[id] || 0, name: allStudents[id].name }))
+            .map(id => ({
+                id,
+                score: scoresObj[id],
+                salawat: salawatObj[id] || 0,
+                name: allStudents[id].name,
+                classId: allStudents[id].classId
+            }))
             .sort((a, b) => b.score - a.score)
-            .slice(0, 10);
+            .slice(0, 6);
 
         if (sorted.length === 0) {
             return `
@@ -186,36 +194,41 @@ function renderLeaderboards() {
       `;
         }
 
-        // Summary bar
-        const totalPts = sorted.reduce((s, x) => s + x.score, 0);
-        const totalSalawat = sorted.reduce((s, x) => s + x.salawat, 0);
-        const summaryBar = `
-          <div class="d-flex justify-content-between align-items-center px-3 py-2 mb-2 rounded-3"
-               style="background:linear-gradient(90deg,#f0fdf4,#f5f3ff); border:1px solid #e5e7eb;">
-            <span class="fw-bold text-primary small"><i class="bi bi-trophy-fill me-1 text-warning"></i>${Math.round(totalPts)} Total Pts</span>
-            <span class="fw-bold small" style="color:#7c3aed;">📿 ${totalSalawat} Salawat</span>
-          </div>`;
-
-        return summaryBar + sorted.map((s, index) => {
-            let medal = '';
+        return sorted.map((s, index) => {
+            let rankBadge = '';
             let bgClass = 'bg-transparent';
             let borderClass = 'border-bottom border-light';
 
-            if (index === 0) { medal = '🥇 '; bgClass = 'bg-warning bg-opacity-10'; borderClass = 'border border-warning'; }
-            else if (index === 1) { medal = '🥈 '; bgClass = 'bg-secondary bg-opacity-10'; }
-            else if (index === 2) { medal = '🥉 '; bgClass = 'bg-danger bg-opacity-10'; }
+            if (index === 0) { rankBadge = '🥇'; bgClass = 'bg-warning bg-opacity-10'; borderClass = 'border border-warning'; }
+            else if (index === 1) { rankBadge = '🥈'; bgClass = 'bg-secondary bg-opacity-10'; }
+            else if (index === 2) { rankBadge = '🥉'; bgClass = 'bg-danger bg-opacity-10'; }
+            else { rankBadge = `#${index + 1}`; }
+
+            const classNameStr = allClasses[s.classId] || "Unknown Class";
 
             return `
       <a href="report.html?s=${s.id}" class="text-decoration-none">
-          <li class="list-group-item d-flex justify-content-between align-items-center py-3 px-3 rounded-4 mb-2 ${bgClass} ${borderClass} shadow-sm profile-hover-card transition-all">
-            <div class="d-flex align-items-center gap-3">
-              <span class="fs-6 fw-bold text-muted" style="width: 24px; text-align: center;">${index + 1}</span>
-              <div class="avatar bg-white shadow-sm text-primary fw-bold text-center rounded-circle d-flex align-items-center justify-content-center" style="width:45px;height:45px; font-size:1.1rem;">
-                 ${s.name.charAt(0).toUpperCase()}
-              </div>
-              <span class="fw-bold text-dark fs-6">${medal}${s.name}</span>
-            </div>
-            <span class="badge bg-primary rounded-pill py-2 px-3 fw-bold shadow-sm fs-6">${s.score} pts</span>
+          <li class="list-group-item py-3 px-3 rounded-4 mb-2 ${bgClass} ${borderClass} shadow-sm profile-hover-card transition-all d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center gap-3">
+                    <span class="fs-5 fw-bold text-muted" style="width: 28px; text-align: center;">${rankBadge}</span>
+                    <div class="avatar bg-white shadow-sm text-primary fw-bold text-center rounded-circle d-flex align-items-center justify-content-center" style="width:45px;height:45px; font-size:1.1rem;">
+                        ${s.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                        <h6 class="fw-bold text-dark mb-0">${s.name}</h6>
+                        <small class="text-muted fw-bold">Class: ${classNameStr}</small>
+                    </div>
+                </div>
+
+                <!-- compact right-aligned stats panel -->
+                <div class="d-flex flex-column gap-1 ms-auto text-end" style="background: linear-gradient(135deg, #eef7ff, #f6fbff); border-radius: 10px; padding: 6px 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+                    <div class="badge fw-bold shadow-sm rounded-pill text-start" style="background: rgba(13,110,253,0.12); color: #0d6efd; font-size: 0.75rem;">
+                        🏆 ${s.score}
+                    </div>
+                    <div class="badge fw-bold shadow-sm rounded-pill text-start" style="background: rgba(13,202,240,0.12); color: #0dcaf0; font-size: 0.75rem;">
+                        📿 ${s.salawat}
+                    </div>
+                </div>
           </li>
       </a>
     `;
