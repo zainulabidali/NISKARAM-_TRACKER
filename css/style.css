@@ -146,3 +146,16 @@ body {
 .shadow-sm { box-shadow: 0 2px 8px rgba(0,0,0,0.05) !important; }
 .rounded-4 { border-radius: 16px !important; }
 .mt-100 { margin-top: 100px; } /* for full page vertical centering */
+
+.profile-hover-card {
+  transition: all 0.3s ease;
+}
+
+.profile-hover-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 25px rgba(0,0,0,.08) !important;
+}
+
+.transition-all {
+  transition: all 0.2s ease;
+}

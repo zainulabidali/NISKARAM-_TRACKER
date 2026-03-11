@@ -59,6 +59,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadClasses();
     await loadData();
     renderLeaderboards();
+    await loadAnnouncementsBanner();
 });
 
 async function loadClasses() {
@@ -238,4 +239,38 @@ function renderLeaderboards() {
     document.getElementById('todayList').innerHTML = generateHTML(scoresToday, salawatToday);
     document.getElementById('weeklyList').innerHTML = generateHTML(scoresWeekly, salawatWeekly);
     document.getElementById('monthlyList').innerHTML = generateHTML(scoresMonthly, salawatMonthly);
+}
+
+// ==========================================
+// Global Announcements Banner
+// ==========================================
+async function loadAnnouncementsBanner() {
+    try {
+        const q = query(collection(db, "announcements"));
+        const snap = await getDocs(q);
+        let anns = [];
+        snap.forEach(d => {
+            anns.push(d.data());
+        });
+        
+        if (anns.length > 0) {
+            anns.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+            const latest = anns[0]; // get newest
+            const banner = document.getElementById('globalAnnouncementBanner');
+            if (banner) {
+                banner.innerHTML = `
+                    <div class="alert border border-warning shadow-sm rounded-4 d-flex align-items-start gap-3 mb-0" style="background: linear-gradient(to right, #fff8e1, #fffdf7);">
+                        <i class="bi bi-megaphone-fill fs-4 text-warning mt-1"></i>
+                        <div>
+                            <h6 class="fw-bold text-dark mb-1">${latest.title} <span class="badge bg-warning text-dark ms-2 rounded-pill shadow-sm" style="font-size:0.65rem;">Notice</span></h6>
+                            <p class="mb-0 small text-secondary">${latest.message}</p>
+                        </div>
+                    </div>
+                `;
+                banner.classList.remove('d-none');
+            }
+        }
+    } catch(err) {
+        console.error("Failed to load global announcements", err);
+    }
 }

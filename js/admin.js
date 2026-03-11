@@ -1,6 +1,8 @@
 import { auth, db } from './firebase.js';
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-auth.js';
-import { collection, query, where, getDocs, addDoc, deleteDoc, doc, updateDoc, getDoc, writeBatch } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js'; let madrasaId = null;
+import { collection, query, where, getDocs, addDoc, deleteDoc, doc, updateDoc, getDoc, writeBatch } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js'; 
+
+let madrasaId = null;
 let classMap = {};
 let studentMap = {};
 
@@ -9,15 +11,24 @@ let recordEditModal;
 
 onAuthStateChanged(auth, async (user) => {
     if (user) {
+        // Super Admin Impersonation logic
+        const overrideId = localStorage.getItem('overrideMadrasaId');
         if (user.uid === 'mt0k0d3UeAgcB8RTzq5k3M97UKa2') {
-            window.location.href = 'superadmin.html';
-            return;
+            if (overrideId) {
+                madrasaId = overrideId;
+                setupImpersonationHeader();
+                await checkMadrasaSubscriptionAndInit();
+                return;
+            } else {
+                window.location.href = 'superadmin.html';
+                return;
+            }
         }
 
         const adminDoc = await getDoc(doc(db, "admins", user.uid));
         if (adminDoc.exists()) {
             madrasaId = adminDoc.data().madrasaId;
-            init();
+            await checkMadrasaSubscriptionAndInit();
         } else {
             alert("Access Denied. Only Admins can access this panel.");
             signOut(auth).then(() => {
@@ -28,6 +39,68 @@ onAuthStateChanged(auth, async (user) => {
         window.location.href = 'login.html';
     }
 });
+
+async function checkMadrasaSubscriptionAndInit() {
+    try {
+        const mDoc = await getDoc(doc(db, "madrasas", madrasaId));
+        if (mDoc.exists()) {
+            const mData = mDoc.data();
+            const today = new Date().toISOString().split('T')[0];
+            const isExpired = mData.status !== 'active' || mData.expiryDate < today;
+            
+            if (isExpired) {
+                document.body.innerHTML = `
+                <div class="d-flex flex-column justify-content-center align-items-center vh-100 bg-light text-center p-4">
+                    <div class="card p-5 shadow border-0 rounded-4" style="max-width: 500px;">
+                        <i class="bi bi-exclamation-triangle-fill text-danger display-1 mb-4"></i>
+                        <h2 class="fw-bold text-dark mb-3">Subscription Expired</h2>
+                        <p class="text-muted fs-5 mb-4">Your Madrasa subscription has expired or is currently inactive. Please contact the administrator.</p>
+                        <button id="expiredLogoutBtn" class="btn btn-primary rounded-pill py-2 px-4 shadow-sm fw-bold">Logout</button>
+                        ${localStorage.getItem('overrideMadrasaId') ? '<button id="returnSuperAdminBtn" class="btn btn-outline-secondary rounded-pill py-2 px-4 shadow-sm fw-bold mt-3 d-block w-100">Return to Super Admin</button>' : ''}
+                    </div>
+                </div>`;
+                
+                document.getElementById('expiredLogoutBtn')?.addEventListener('click', () => {
+                    localStorage.removeItem('overrideMadrasaId');
+                    signOut(auth).then(() => window.location.href = 'login.html');
+                });
+                document.getElementById('returnSuperAdminBtn')?.addEventListener('click', () => {
+                    localStorage.removeItem('overrideMadrasaId');
+                    window.location.href = 'superadmin.html';
+                });
+                
+                // Auto-update to inactive if expired date
+                if (mData.status === 'active' && mData.expiryDate < today) {
+                    await updateDoc(doc(db, "madrasas", madrasaId), { status: 'inactive' });
+                }
+                return;
+            }
+            
+            // Active -> Init Dashboard
+            init();
+        } else {
+            alert("Madrasa profile not found.");
+            signOut(auth).then(() => window.location.href = 'login.html');
+        }
+    } catch(e) {
+        console.error("Error verifying subscription:", e);
+    }
+}
+
+function setupImpersonationHeader() {
+    // Add an 'Exit Admin Mode' button next to logout
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn && logoutBtn.parentNode) {
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-sm btn-warning rounded-pill px-3 ms-2 fw-bold text-dark shadow-sm shadow';
+        btn.innerHTML = '<i class="bi bi-arrow-return-left me-1"></i> Exit Admin Mode';
+        btn.onclick = () => {
+            localStorage.removeItem('overrideMadrasaId');
+            window.location.href = 'superadmin.html';
+        };
+        logoutBtn.parentNode.insertBefore(btn, logoutBtn);
+    }
+}
 
 document.addEventListener('DOMContentLoaded', () => {
     const logoutBtn = document.getElementById('logoutBtn');
@@ -98,6 +171,7 @@ async function init() {
     await loadSubjects();
     await loadStudents();
     await loadBooks();
+    await loadAnnouncementsBanner();
 }
 
 async function loadClasses() {
@@ -754,3 +828,37 @@ document.getElementById('saveRecordEditBtn').onclick = async () => {
         alert("Failed to update record: " + err.message);
     }
 };
+
+// ==========================================
+// Global Announcements Banner
+// ==========================================
+async function loadAnnouncementsBanner() {
+    try {
+        const q = query(collection(db, "announcements"));
+        const snap = await getDocs(q);
+        let anns = [];
+        snap.forEach(d => {
+            anns.push(d.data());
+        });
+        
+        if (anns.length > 0) {
+            anns.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+            const latest = anns[0]; // get newest
+            const banner = document.getElementById('globalAnnouncementBanner');
+            if (banner) {
+                banner.innerHTML = `
+                    <div class="alert border border-warning shadow-sm rounded-4 d-flex align-items-start gap-3 mb-0" style="background: linear-gradient(to right, #fff8e1, #fffdf7);">
+                        <i class="bi bi-megaphone-fill fs-4 text-warning mt-1"></i>
+                        <div>
+                            <h6 class="fw-bold text-dark mb-1">${latest.title} <span class="badge bg-warning text-dark ms-2 rounded-pill shadow-sm" style="font-size:0.65rem;">Notice</span></h6>
+                            <p class="mb-0 small text-secondary">${latest.message}</p>
+                        </div>
+                    </div>
+                `;
+                banner.classList.remove('d-none');
+            }
+        }
+    } catch(err) {
+        console.error("Failed to load global announcements", err);
+    }
+}

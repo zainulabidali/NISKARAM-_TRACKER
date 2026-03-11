@@ -8,6 +8,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
         body {
             padding-bottom: 20px;
@@ -52,6 +53,54 @@
                     Create Madrasa & Admin
                 </button>
             </form>
+        </div>
+
+        <!-- Analytics Dashboard -->
+        <h5 class="text-primary mb-3 fw-bold"><i class="bi bi-graph-up me-2"></i>System Analytics</h5>
+        <div class="row g-3 mb-4" id="analyticsDashboard">
+            <div class="col-6 col-md-4"><div class="card p-3 shadow-sm border-0 rounded-4 bg-white text-center"><h6 class="text-muted small fw-bold mb-1">Total Madrasas</h6><h3 class="fw-bold mb-0 text-primary" id="statMadrasas">-</h3></div></div>
+            <div class="col-6 col-md-4"><div class="card p-3 shadow-sm border-0 rounded-4 bg-white text-center"><h6 class="text-muted small fw-bold mb-1">Total Students</h6><h3 class="fw-bold mb-0 text-primary" id="statStudents">-</h3></div></div>
+            <div class="col-6 col-md-4"><div class="card p-3 shadow-sm border-0 rounded-4 bg-white text-center"><h6 class="text-muted small fw-bold mb-1">Total Classes</h6><h3 class="fw-bold mb-0 text-primary" id="statClasses">-</h3></div></div>
+            <div class="col-6 col-md-4"><div class="card p-3 shadow-sm border-0 rounded-4 bg-white text-center"><h6 class="text-muted small fw-bold mb-1">Total Records</h6><h3 class="fw-bold mb-0 text-accent" id="statRecords">-</h3></div></div>
+            <div class="col-6 col-md-4"><div class="card p-3 shadow-sm border-0 rounded-4 bg-white text-center"><h6 class="text-muted small fw-bold mb-1">Today's Entries</h6><h3 class="fw-bold mb-0 text-accent" id="statToday">-</h3></div></div>
+            <div class="col-6 col-md-4"><div class="card p-3 shadow-sm border-0 rounded-4 bg-white text-center"><h6 class="text-muted small fw-bold mb-1">Active Madrasas</h6><h3 class="fw-bold mb-0 text-success" id="statActive">-</h3></div></div>
+        </div>
+
+        <!-- Leaderboard -->
+        <h5 class="text-primary mb-3 fw-bold"><i class="bi bi-trophy me-2"></i>Top Madrasas</h5>
+        <div class="card mb-4 p-4 shadow-sm border-0 rounded-4 bg-white">
+            <ul class="list-group list-group-flush" id="madrasaLeaderboardList">
+                <div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div></div>
+            </ul>
+        </div>
+
+        <!-- Global Announcements -->
+        <h5 class="text-primary mb-3 fw-bold"><i class="bi bi-megaphone me-2"></i>Global Announcements</h5>
+        <div class="card mb-4 p-4 shadow-sm border-0 rounded-4 bg-white">
+            <form id="createAnnouncementForm" class="mb-4">
+                <input type="text" id="annTitle" class="form-control bg-light border-0 mb-2" placeholder="Announcement Title" required>
+                <textarea id="annMessage" class="form-control bg-light border-0 mb-2" placeholder="Message content..." rows="2" required></textarea>
+                <button type="submit" class="btn btn-warning w-100 py-2 rounded-pill fw-bold shadow-sm" id="btnPostAnn"><i class="bi bi-send me-1"></i> Post Announcement</button>
+            </form>
+            <div id="announcementList" class="d-flex flex-column gap-2"></div>
+        </div>
+
+        <!-- Data Export -->
+        <h5 class="text-primary mb-3 fw-bold"><i class="bi bi-cloud-download me-2"></i>Data Export</h5>
+        <div class="card mb-4 p-4 shadow-sm border-0 rounded-4 bg-white">
+            <div class="d-flex gap-2 mb-3">
+                <select id="exportType" class="form-select bg-light border-0 fw-bold text-secondary">
+                    <option value="madrasas">All Madrasas</option>
+                    <option value="students">Students</option>
+                    <option value="records">Tracker Records</option>
+                </select>
+                <select id="exportFormat" class="form-select bg-light border-0 fw-bold text-secondary">
+                    <option value="json">JSON</option>
+                    <option value="csv">CSV</option>
+                    <option value="xlsx">Excel (.xlsx)</option>
+                </select>
+            </div>
+            <button id="btnExport" class="btn btn-success w-100 py-2 rounded-pill fw-bold shadow-sm"><i class="bi bi-download me-1"></i> Download Data</button>
         </div>
 
         <h5 class="text-primary mb-3 fw-bold d-flex justify-content-between align-items-center">
