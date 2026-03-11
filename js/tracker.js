@@ -9,7 +9,7 @@ let booksList = [];
 
 const PRAYERS = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"];
 const PRAYER_SCORES = { "Jamaat": 2, "Individual": 1, "Not Prayed": 0 };
-let prayerSelections = { fajr: "Jamaat", dhuhr: "Jamaat", asr: "Jamaat", maghrib: "Jamaat", isha: "Jamaat" };
+let prayerSelections = { fajr: "", dhuhr: "", asr: "", maghrib: "", isha: "" };
 let selectedDateStr = "";
 
 // date utils
@@ -346,6 +346,15 @@ async function refreshStudentSummary(studentId) {
             if (r.date === selectedDateStr) {
                 prayersToday = Number(r.prayerScore) || 0;
                 studyToday = Number(r.subjectScore) || 0;
+                
+                // Update prayerSelections with previously saved data
+                if (r.prayers) {
+                    prayerSelections.fajr = r.prayers.fajr || "";
+                    prayerSelections.dhuhr = r.prayers.dhuhr || "";
+                    prayerSelections.asr = r.prayers.asr || "";
+                    prayerSelections.maghrib = r.prayers.maghrib || "";
+                    prayerSelections.isha = r.prayers.isha || "";
+                }
             }
         });
     } catch (err) {
@@ -372,6 +381,9 @@ async function refreshStudentSummary(studentId) {
     const progTotal = document.querySelector('.progress-circle.text-success');
     progTotal.style.background = `conic-gradient(#10b981 ${tPct}%, #e5e7eb 0)`;
     progTotal.innerText = `${tPct}%`;
+
+    // Visually update prayer UI
+    renderPrayersForm();
 }
 
 function setupSalawat() {
@@ -382,19 +394,6 @@ function setupSalawat() {
         display.innerText = parseInt(hiddenInput.value) || 0;
     }
 
-    // Quick-add buttons
-    document.querySelectorAll('.salawat-add-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            hiddenInput.value = (parseInt(hiddenInput.value) || 0) + parseInt(btn.dataset.add);
-            updateDisplay();
-        });
-    });
-
-    // Reset button
-    document.getElementById('salawatResetBtn').addEventListener('click', () => {
-        hiddenInput.value = 0;
-        updateDisplay();
-    });
 
     // Manual add button
     document.getElementById('salawatManualAddBtn').addEventListener('click', () => {
@@ -423,6 +422,9 @@ function renderPrayersForm() {
         } else if (status === 'Not Prayed') {
             bg = 'bg-danger text-white border-danger';
             iconColor = 'text-white';
+        } else if (status === '') {
+            bg = 'bg-light text-dark border'; // Default neutral state
+            iconColor = 'text-muted'; // Neutral icon
         }
 
         let pIcon = 'bi-sun';
@@ -436,7 +438,8 @@ function renderPrayersForm() {
 
     container.innerHTML = PRAYERS.map(p => {
         const lowerP = p.toLowerCase();
-        const props = getBtnProps(prayerSelections[lowerP] || "Jamaat", lowerP);
+        // Use an empty string if null/undefined, instead of defaulting to "Jamaat"
+        const props = getBtnProps(prayerSelections[lowerP] || "", lowerP);
         return `
             <div class="text-center d-flex flex-column align-items-center" style="min-width: 60px;">
                 <button type="button" class="btn ${props.bg} shadow-sm rounded-4 p-3 mb-1 prayer-trigger-btn d-flex align-items-center justify-content-center" 
@@ -496,17 +499,19 @@ document.getElementById('trackerForm').addEventListener('submit', async (e) => {
 
     const classId = studentsData[studentId].classId;
 
-    let prayerScore = 0;
-    let prayerData = {};
-    let prayersRecordFormat = { fajr: "", dhuhr: "", asr: "", maghrib: "", isha: "" };
+    const cleanedPrayers = {};
+    for (const key in prayerSelections) {
+        if (prayerSelections[key]) {
+            cleanedPrayers[key] = prayerSelections[key];
+        }
+    }
 
-    PRAYERS.forEach(p => {
-        const lowerP = p.toLowerCase();
-        const val = prayerSelections[lowerP];
-        prayerData[p] = val;
-        prayersRecordFormat[lowerP] = val;
-        prayerScore += PRAYER_SCORES[val];
-    });
+    let prayerScore = 0;
+    
+    // We still calculate the score using cleanedPrayers to ignore empty states
+    for (const key in cleanedPrayers) {
+        prayerScore += PRAYER_SCORES[cleanedPrayers[key]] || 0;
+    }
 
     let subjectScore = 0;
     let subjectData = [];
@@ -530,8 +535,7 @@ document.getElementById('trackerForm').addEventListener('submit', async (e) => {
         studentId,
         classId,
         date: selectedDateStr,
-        prayers: prayerData,
-        ...prayersRecordFormat,
+        prayers: cleanedPrayers,
         subjectScore,
         prayerScore,
         totalScore,     // Salawat does NOT affect this score
@@ -554,7 +558,8 @@ document.getElementById('trackerForm').addEventListener('submit', async (e) => {
             document.querySelectorAll('.subject-checkbox:checked, .book-checkbox:checked').forEach(cb => cb.checked = false);
             document.getElementById('salawatCount').value = 0;
             document.getElementById('salawatDisplay').innerText = 0;
-            prayerSelections = { fajr: "Jamaat", dhuhr: "Jamaat", asr: "Jamaat", maghrib: "Jamaat", isha: "Jamaat" };
+            // Retain the actual UI values post-save, or reset depending on view context?
+            // Actually, we should just let `refreshStudentSummary` reload it
             renderPrayersForm();
             refreshStudentSummary(studentId);
         } catch (err) {
@@ -565,7 +570,6 @@ document.getElementById('trackerForm').addEventListener('submit', async (e) => {
         document.querySelectorAll('.subject-checkbox:checked, .book-checkbox:checked').forEach(cb => cb.checked = false);
         document.getElementById('salawatCount').value = 0;
         document.getElementById('salawatDisplay').innerText = 0;
-        prayerSelections = { fajr: "Jamaat", dhuhr: "Jamaat", asr: "Jamaat", maghrib: "Jamaat", isha: "Jamaat" };
         renderPrayersForm();
         refreshStudentSummary(studentId);
     }
