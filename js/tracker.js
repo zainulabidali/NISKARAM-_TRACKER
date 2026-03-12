@@ -182,6 +182,14 @@ async function loadSubjects() {
     } catch (err) {
         container.innerHTML = '<p class="text-danger small">Error loading subjects (offline).</p>';
     }
+
+    // Add listeners for real-time progress update
+    document.querySelectorAll('.subject-checkbox').forEach(cb => {
+        cb.addEventListener('change', () => {
+            const subjectScore = document.querySelectorAll('.subject-checkbox:checked').length;
+            updateProgress(0, subjectScore, subjectsList.length);
+        });
+    });
 }
 
 async function loadBooks() {
@@ -389,13 +397,8 @@ async function refreshStudentSummary(studentId) {
                     });
                 }
 
-                // Update Books
-                if (r.books && r.books.length > 0) {
-                    r.books.forEach(bookId => {
-                        const cb = document.getElementById(`book_${bookId}`);
-                        if (cb) cb.checked = true;
-                    });
-                }
+               
+               
 
                 // Update Salawat
                 if (r.salawatCount !== undefined) {
@@ -411,23 +414,11 @@ async function refreshStudentSummary(studentId) {
     document.getElementById('summaryPoints').innerText = totalScore;
     document.getElementById('summarySalawat').innerText = totalSalawat;
 
-    // Progress Bar Calcs
-    const maxPrayers = 5;
-    const maxStudy = subjectsList.length || 1;
+    document.getElementById('summaryPoints').innerText = totalScore;
+    document.getElementById('summarySalawat').innerText = totalSalawat;
 
-    const pPct = Math.min(100, Math.round((prayersToday / maxPrayers) * 100));
-    const sPct = Math.min(100, Math.round((studyToday / maxStudy) * 100));
-    const tPct = Math.min(100, Math.round(((prayersToday + studyToday) / (maxPrayers + maxStudy)) * 100));
-
-    document.getElementById('progPrayers').style.background = `conic-gradient(#3b82f6 ${pPct}%, #e5e7eb 0)`;
-    document.getElementById('progPrayers').innerText = `${pPct}%`;
-
-    document.getElementById('progStudy').style.background = `conic-gradient(#f59e0b ${sPct}%, #e5e7eb 0)`;
-    document.getElementById('progStudy').innerText = `${sPct}%`;
-
-    const progTotal = document.querySelector('.progress-circle.text-success');
-    progTotal.style.background = `conic-gradient(#10b981 ${tPct}%, #e5e7eb 0)`;
-    progTotal.innerText = `${tPct}%`;
+    // Trigger Dynamic Progress Updates
+    updateProgress(prayersToday, studyToday, subjectsList.length);
 
     // Visually update prayer UI
     renderPrayersForm();
@@ -516,9 +507,13 @@ function setupPrayerModal() {
             const activePrayer = document.getElementById('activePrayerContext').value;
 
             prayerSelections[activePrayer] = status;
-
+            
             // visually update the button
             renderPrayersForm();
+
+            // Update real-time progress
+            const subjectScore = document.querySelectorAll('.subject-checkbox:checked').length;
+            updateProgress(0, subjectScore, subjectsList.length);
 
             const modalEl = document.getElementById('prayerModal');
             const modal = bootstrap.Modal.getInstance(modalEl);
@@ -573,7 +568,7 @@ document.getElementById('trackerForm').addEventListener('submit', async (e) => {
     });
 
     const salawatCount = parseInt(document.getElementById('salawatCount').value) || 0;
-    const totalScore = prayerScore + subjectScore + Math.floor(salawatCount / 100);
+    const totalScore = prayerScore + subjectScore;
 
     const recordId = `${studentId}_${selectedDateStr}`;
 
@@ -585,7 +580,7 @@ document.getElementById('trackerForm').addEventListener('submit', async (e) => {
         prayers: cleanedPrayers,
         subjectScore,
         prayerScore,
-        totalScore,     // Salawat does NOT affect this score
+        totalScore,
         salawatCount,
         subjects: subjectData,
         books: booksData,
@@ -602,6 +597,12 @@ document.getElementById('trackerForm').addEventListener('submit', async (e) => {
         try {
             await setDoc(doc(db, "records", recordId), record, { merge: true });
             alert("Record saved successfully!");
+            
+            // Remove from local queue since it's now online
+            let currentOffline = JSON.parse(localStorage.getItem('trackerData') || '[]');
+            currentOffline = currentOffline.filter(r => r._id !== recordId);
+            localStorage.setItem('trackerData', JSON.stringify(currentOffline));
+
             // Refresh logic already clears out and sets proper values
             refreshStudentSummary(studentId);
         } catch (err) {
@@ -615,6 +616,43 @@ document.getElementById('trackerForm').addEventListener('submit', async (e) => {
     btn.disabled = false;
     btn.innerHTML = originalHtml;
 });
+
+async function updateProgress(prayerScore, subjectScore, totalSubjects) {
+    const maxPrayers = 10; // 5 prayers * 2 pts max each (Jamaat)
+    // Actually the user said: "There are 5 daily prayers. Prayer progress = (completed prayers / 5) * 100"
+    // And "Total progress = (prayerScore + subjectScore) / (5 + totalSubjects) * 100"
+    // Wait, the calculation rules in the prompt:
+    // Prayers: (completed prayers / 5) * 100
+    // Study: (subjects studied / total subjects) * 100
+    // Total: (completed prayers + subjectScore) / (5 + totalSubjects) * 100
+    // Wait, the example for Total says: "Total = (prayerScore + subjectScore) / (5 + totalSubjects) * 100"
+    // where PrayerScore = 3, SubjectScore = 2, TotalSubjects = 4 -> 5/9 = 55%.
+    // In the example, prayerScore seems to be the "count" of completed prayers, not the points.
+    
+    const countCompletedPrayers = Object.values(prayerSelections).filter(s => s === 'Jamaat' || s === 'Individual').length;
+    
+    const pPct = Math.round((countCompletedPrayers / 5) * 100);
+    const sPct = totalSubjects > 0 ? Math.round((subjectScore / totalSubjects) * 100) : 0;
+    const tPct = Math.round(((countCompletedPrayers + subjectScore) / (5 + totalSubjects)) * 100);
+
+    const progPrayers = document.getElementById('progPrayers');
+    if (progPrayers) {
+        progPrayers.style.background = `conic-gradient(#3b82f6 ${pPct}%, #e5e7eb 0)`;
+        progPrayers.innerText = `${pPct}%`;
+    }
+
+    const progStudy = document.getElementById('progStudy');
+    if (progStudy) {
+        progStudy.style.background = `conic-gradient(#f59e0b ${sPct}%, #e5e7eb 0)`;
+        progStudy.innerText = `${sPct}%`;
+    }
+
+    const progTotal = document.querySelector('.progress-circle.text-success');
+    if (progTotal) {
+        progTotal.style.background = `conic-gradient(#10b981 ${tPct}%, #e5e7eb 0)`;
+        progTotal.innerText = `${tPct}%`;
+    }
+}
 
 async function syncOfflineRecords() {
     let offline = JSON.parse(localStorage.getItem('trackerData') || '[]');

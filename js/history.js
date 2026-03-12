@@ -124,73 +124,64 @@ function renderRecords() {
         return;
     }
 
-    container.innerHTML = filtered.map(r => {
+    const tableHeader = `
+        <div class="table-responsive bg-white rounded-4 shadow-sm border-0">
+            <table class="table table-sm table-hover mb-0 align-middle" style="font-size: 0.85rem;">
+                <thead class="bg-light text-muted small fw-bold">
+                    <tr>
+                        <th class="ps-3 py-3 border-0">Student Name</th>
+                        <th class="py-3 border-0">Class</th>
+                        <th class="text-center py-3 border-0">F</th>
+                        <th class="text-center py-3 border-0">D</th>
+                        <th class="text-center py-3 border-0">A</th>
+                        <th class="text-center py-3 border-0">M</th>
+                        <th class="text-center py-3 border-0">I</th>
+                        <th class="text-center py-3 border-0">Sub</th>
+                        <th class="text-center py-3 border-0">Salawat</th>
+                        <th class="text-center py-3 pe-3 border-0">Pts</th>
+                    </tr>
+                </thead>
+                <tbody id="recordsTableBody">
+    `;
+
+    const tableFooter = `
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    const rows = filtered.map(r => {
         const studentName = allStudents[r.studentId]?.name || 'Unknown Student';
         const className = allClasses[r.classId]?.name || 'Unknown Class';
 
         const rawPrayers = r.prayers || {};
         const orderedPrayers = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
-        
-        const emojiMap = {
-            fajr: '🌅 Fajr',
-            dhuhr: '☀️ Dhuhr',
-            asr: '🌤 Asr',
-            maghrib: '🌇 Maghrib',
-            isha: '🌙 Isha'
-        };
 
-        const prayText = orderedPrayers.map(p => {
-            if (!rawPrayers[p]) return '';
+        const prayerIndicators = orderedPrayers.map(p => {
             const status = rawPrayers[p];
-            let col = status === 'Jamaat' ? 'text-success bg-success bg-opacity-10'
-                : status === 'Individual' ? 'text-warning bg-warning bg-opacity-10 text-dark' : 'text-danger bg-danger bg-opacity-10';
-            const emojiName = emojiMap[p] || p;
-            return `<span class="badge rounded-pill fw-bold shadow-sm px-3 py-2 me-1 mb-2 ${col}">${emojiName}</span>`;
-        }).filter(html => html !== '').join('');
+            if (!status || status === 'Not Prayed') {
+                return '<td class="text-center py-2"><span class="text-danger">✖</span></td>';
+            } else if (status === 'Jamaat') {
+                return '<td class="text-center py-2"><span class="text-success fw-bold">✔</span></td>';
+            } else {
+                // Individual
+                return '<td class="text-center py-2"><span class="text-warning fw-bold">✔</span></td>';
+            }
+        }).join('');
 
-        let timeStr = 'Offline';
-        if (r.timestamp) {
-            timeStr = new Date(r.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        }
-        
         const salawatCount = r.salawatCount || 0;
 
         return `
-        <div class="card shadow-sm border-0 rounded-4 p-4 bg-white mb-2">
-          
-          <div class="d-flex justify-content-between align-items-start mb-3">
-             <div class="d-flex align-items-center gap-3">
-                 <div class="avatar bg-light text-primary fw-bold text-center rounded-circle d-flex align-items-center justify-content-center shadow-sm" style="width:45px;height:45px; font-size:1.1rem; border: 2px solid #e9ecef;">
-                     ${studentName.charAt(0).toUpperCase()}
-                 </div>
-                 <div>
-                     <h6 class="fw-bold fs-5 text-dark mb-0">${studentName}</h6>
-                     <span class="badge bg-light text-muted fw-bold mt-1 border border-light shadow-sm">${className}</span>
-                 </div>
-             </div>
-             
-             <div class="badge rounded-pill py-2 px-3 fw-bold shadow-sm" style="background: linear-gradient(135deg, #22c55e, #16a34a); color: white; font-size: 0.9rem;">
-                 🏆 ${r.totalScore} pts
-             </div>
-          </div>
-          
-          <div class="d-flex flex-wrap border-bottom border-light pb-2 mb-3 mt-2">
-             ${prayText}
-          </div>
-          
-          <div class="d-flex justify-content-between align-items-center">
-             <div class="d-flex gap-2">
-                 <div class="small fw-bold text-muted bg-light px-2 py-1 rounded-3 border-0 shadow-sm">
-                    📚 Subjects: <span class="text-accent ms-1">${r.subjectScore}</span>
-                 </div>
-                 <div class="small fw-bold text-muted bg-light px-2 py-1 rounded-3 border-0 shadow-sm">
-                    📿 Salawat: <span class="text-info ms-1">${salawatCount}</span>
-                 </div>
-             </div>
-             <span class="text-muted opacity-75 fw-bold" style="font-size: 0.75rem;"><i class="bi bi-cloud-check me-1"></i>Saved: ${timeStr}</span>
-          </div>
-          
-        </div>
-      `;
+            <tr class="border-bottom border-light">
+                <td class="ps-3 py-2 fw-bold text-dark">${studentName}</td>
+                <td class="py-2 text-muted small">${className}</td>
+                ${prayerIndicators}
+                <td class="text-center py-2 fw-bold text-accent">${r.subjectScore}</td>
+                <td class="text-center py-2 text-info small fw-bold">${salawatCount}</td>
+                <td class="text-center py-2 pe-3"><span class="badge rounded-pill bg-success bg-opacity-10 text-success fw-bold px-2">${r.totalScore}</span></td>
+            </tr>
+        `;
     }).join('');
+
+    container.innerHTML = tableHeader + rows + tableFooter;
 }

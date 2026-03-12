@@ -156,6 +156,10 @@ body {
   box-shadow: 0 10px 25px rgba(0,0,0,.08) !important;
 }
 
+.progress-circle {
+  transition: background 0.5s ease;
+}
+
 .transition-all {
   transition: all 0.2s ease;
 }

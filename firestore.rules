@@ -81,9 +81,10 @@ service cloud.firestore {
       // AUTH UPDATE: Students don't log in, so anyone can create a tracker record
       allow read: if true; 
       allow create: if true;
+      allow update: if true;
       
-      // Only Admins can modify/delete records
-      allow update, delete: if isAuthorizedForMadrasa(resource.data.madrasaId);
+      // Only Admins can delete records
+      allow delete: if isAuthorizedForMadrasa(resource.data.madrasaId);
     }
   }
 }
