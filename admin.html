@@ -165,21 +165,44 @@
                 <button class="btn btn-sm btn-light border text-muted shadow-sm fw-bold mb-3 px-3 py-2 rounded-pill" onclick="closeAdminModule()">
                     <i class="bi bi-arrow-left me-1"></i> Back to Dashboard
                 </button>
-                <div class="card p-4 shadow-sm rounded-4 border-0">
-                    <h5 class="text-primary fw-bold mb-3"><i class="bi bi-people me-2"></i>Students</h5>
-                    <form id="addStudentForm" class="mb-3">
-                        <div class="mb-2">
-                            <input type="text" id="studentName" class="form-control bg-light border-0"
+
+                <!-- VIEW A: Class Folders -->
+                <div id="studentClassFoldersView">
+                    <div class="card p-4 shadow-sm rounded-4 border-0">
+                        <h5 class="text-success fw-bold mb-1"><i class="bi bi-people me-2"></i>Students</h5>
+                        <p class="text-muted small mb-3">Select a class to view its students.</p>
+                        <div id="studentClassFoldersList" class="d-flex flex-column gap-2">
+                            <div class="text-center py-3">
+                                <div class="spinner-border spinner-border-sm text-success"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIEW B: Students inside a class -->
+                <div id="studentClassDetailView" class="d-none">
+                    <button class="btn btn-sm btn-light border text-muted shadow-sm fw-bold mb-3 px-3 py-2 rounded-pill" id="btnBackToClassFolders">
+                        <i class="bi bi-arrow-left me-1"></i> Back to Classes
+                    </button>
+                    <div class="card p-4 shadow-sm rounded-4 border-0">
+                        <div class="d-flex align-items-center justify-content-between mb-3">
+                            <h5 class="text-success fw-bold mb-0">
+                                <i class="bi bi-folder2-open me-2"></i>
+                                <span id="openedClassName">Class</span>
+                            </h5>
+                        </div>
+
+                        <!-- Add Student Form (only shown inside a class) -->
+                        <form id="addStudentForm" class="d-flex gap-2 mb-4 align-items-end">
+                            <input type="text" id="studentName" class="form-control bg-light border-0 flex-grow-1"
                                 placeholder="Student Name" required>
-                        </div>
-                        <div class="d-flex gap-2 mt-3">
-                            <select id="studentClass" class="form-select bg-light border-0" required>
-                                <option value="">Select Class</option>
-                            </select>
-                            <button type="submit" class="btn btn-primary shadow-sm px-4 rounded-pill">Add</button>
-                        </div>
-                    </form>
-                    <ul class="list-group list-group-flush gap-2" id="studentsList"></ul>
+                            <button type="submit" class="btn btn-success shadow-sm px-4 rounded-pill fw-bold">
+                                <i class="bi bi-plus-lg me-1"></i>Add
+                            </button>
+                        </form>
+
+                        <ul class="list-group list-group-flush gap-2" id="studentsList"></ul>
+                    </div>
                 </div>
             </div>
 

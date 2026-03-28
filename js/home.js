@@ -1,4 +1,4 @@
-﻿import { db } from './firebase.js';
+import { db } from './firebase.js';
 import { injectBottomNav } from './app.js';
 import { collection, query, where, getDocs, doc, getDoc, orderBy, limit } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js';
 
@@ -117,6 +117,10 @@ async function ensureClassesLoaded() {
         const savedClassId = localStorage.getItem('selectedLeaderboardClass');
         if (savedClassId && allClasses[savedClassId]) {
             classFilter.value = savedClassId;
+            // Restore leaderboard data for the previously selected class.
+            // We intentionally do NOT await here — the finally block re-enables
+            // the dropdown and this load can happen concurrently.
+            loadLeaderboardForClass(savedClassId);
         }
 
         if (classRows.length === 0) {

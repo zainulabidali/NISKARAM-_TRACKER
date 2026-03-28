@@ -5,6 +5,8 @@ import { collection, query, where, getDocs, addDoc, deleteDoc, doc, updateDoc, g
 let madrasaId = null;
 let classMap = {};
 let studentMap = {};
+let activeStudentClassId = null;
+let activeStudentClassName = null;
 
 let editModal;
 let recordEditModal;
@@ -149,7 +151,16 @@ window.openAdminModule = (moduleId) => {
 
     if (moduleId === 'records') {
         populateRecordClassFilter();
-        loadAdminRecordsView();
+        loadAllStudentsForRecords().then(() => loadAdminRecordsView());
+    }
+
+    if (moduleId === 'students') {
+        // Always start from the class folders view
+        activeStudentClassId = null;
+        activeStudentClassName = null;
+        document.getElementById('studentClassDetailView').classList.add('d-none');
+        document.getElementById('studentClassFoldersView').classList.remove('d-none');
+        loadStudentClassFolders();
     }
 };
 
@@ -169,14 +180,12 @@ async function init() {
 
     await loadClasses();
     await loadSubjects();
-    await loadStudents();
     await loadBooks();
     await loadAnnouncementsBanner();
 }
 
 async function loadClasses() {
     const list = document.getElementById('classesList');
-    const classSelect = document.getElementById('studentClass');
     const subjectClass = document.getElementById('subjectClass');
     const subjectClassFilter = document.getElementById('subjectClassFilter');
 
@@ -187,7 +196,6 @@ async function loadClasses() {
 
     list.innerHTML = snap.empty ? '<li class="list-group-item text-muted border-0 px-0">No classes found.</li>' : '';
     
-    classSelect.innerHTML = '<option value="">Select Class</option>';
     subjectClass.innerHTML = '<option value="">Select Class</option>';
     subjectClassFilter.innerHTML = '<option value="all">All Classes</option>';
     document.getElementById('editClass').innerHTML = '<option value="">Select Class</option>'; // Clear for re-population
@@ -205,14 +213,54 @@ async function loadClasses() {
         </div>
       </li>
     `;
-        classSelect.innerHTML += `<option value="${d.id}">${data.name}</option>`;
         subjectClass.innerHTML += `<option value="${d.id}">${data.name}</option>`;
         subjectClassFilter.innerHTML += `<option value="${d.id}">${data.name}</option>`;
         document.getElementById('editClass').innerHTML += `<option value="${d.id}">${data.name}</option>`;
     });
 
     attachCrudEvents();
+    // Refresh student folder list if the students module is open
+    loadStudentClassFolders();
 }
+
+function loadStudentClassFolders() {
+    const foldersList = document.getElementById('studentClassFoldersList');
+    if (!foldersList) return;
+
+    const classes = Object.entries(classMap).sort((a, b) => a[1].localeCompare(b[1]));
+
+    if (classes.length === 0) {
+        foldersList.innerHTML = `
+            <div class="text-center py-4 bg-light rounded-4 p-4">
+                <i class="bi bi-folder-x fs-1 opacity-25 d-block mb-2 text-success"></i>
+                <p class="text-muted fw-bold mb-0">No classes found. Add classes first.</p>
+            </div>`;
+        return;
+    }
+
+    foldersList.innerHTML = '';
+    classes.forEach(([id, name]) => {
+        foldersList.innerHTML += `
+            <div class="d-flex align-items-center gap-3 p-3 bg-white rounded-4 border shadow-sm profile-hover-card"
+                 style="cursor: pointer;" onclick="openClassFolder('${id}', '${name.replace(/'/g, "\\'")}')">
+                <div class="text-success fs-4"><i class="bi bi-folder2"></i></div>
+                <span class="fw-bold text-dark flex-grow-1">${name}</span>
+                <i class="bi bi-chevron-right text-muted"></i>
+            </div>`;
+    });
+}
+
+window.openClassFolder = async (classId, className) => {
+    activeStudentClassId = classId;
+    activeStudentClassName = className;
+
+    document.getElementById('openedClassName').textContent = className;
+    document.getElementById('studentClassFoldersView').classList.add('d-none');
+    document.getElementById('studentClassDetailView').classList.remove('d-none');
+    document.getElementById('studentName').value = '';
+
+    await loadStudents();
+};
 
 let activeSubjectClassFilter = 'all';
 
@@ -288,27 +336,42 @@ async function loadBooks() {
 
 async function loadStudents() {
     const list = document.getElementById('studentsList');
-    if (!madrasaId) return;
+    if (!madrasaId || !activeStudentClassId) return;
 
-    const q = query(collection(db, "students"), where("madrasaId", "==", madrasaId));
+    list.innerHTML = '<li class="list-group-item border-0 px-0"><div class="text-center py-2"><div class="spinner-border spinner-border-sm text-success"></div></div></li>';
+
+    const q = query(collection(db, "students"), where("madrasaId", "==", madrasaId), where("classId", "==", activeStudentClassId));
     const snap = await getDocs(q);
 
-    list.innerHTML = snap.empty ? '<li class="list-group-item text-muted border-0 px-0">No students found.</li>' : '';
-    studentMap = {};
+    // Always keep studentMap updated for the records module
+    snap.forEach(d => { studentMap[d.id] = { ...d.data(), id: d.id }; });
 
-    snap.forEach(d => {
-        const data = d.data();
-        studentMap[d.id] = data;
-        const className = classMap[data.classId] || "Unknown Class";
+    if (snap.empty) {
+        list.innerHTML = `
+            <li class="list-group-item border-0 px-0">
+                <div class="text-center py-4 bg-light rounded-4 p-3">
+                    <i class="bi bi-person-x fs-1 opacity-25 d-block mb-2 text-success"></i>
+                    <p class="text-muted fw-bold mb-0">No students in this class yet.</p>
+                </div>
+            </li>`;
+        return;
+    }
+
+    let students = [];
+    snap.forEach(d => students.push({ id: d.id, ...d.data() }));
+    students.sort((a, b) => a.name.localeCompare(b.name));
+
+    list.innerHTML = '';
+    students.forEach(data => {
         list.innerHTML += `
-      <li class="list-group-item d-flex justify-content-between align-items-center bg-transparent border rounded p-3">
-        <div>
-           <div class="fw-bold mb-1">${data.name}</div>
-           <div class="badge bg-light text-dark shadow-sm">${className}</div>
+      <li class="list-group-item d-flex justify-content-between align-items-center bg-white border rounded-4 p-3 mb-1 shadow-sm">
+        <div class="d-flex align-items-center gap-3">
+           <div class="avatar bg-success bg-opacity-10 text-success fw-bold text-center rounded-circle d-flex align-items-center justify-content-center" style="width:38px;height:38px;font-size:1rem;">${data.name.charAt(0).toUpperCase()}</div>
+           <span class="fw-bold text-dark">${data.name}</span>
         </div>
         <div>
-           <button class="btn btn-sm text-primary edit-btn fs-5 me-2" data-id="${d.id}" data-type="students" data-name="${data.name}" data-class="${data.classId}"><i class="bi bi-pencil-square"></i></button>
-           <button class="btn btn-sm text-danger del-btn fs-5" data-id="${d.id}" data-type="students"><i class="bi bi-trash"></i></button>
+           <button class="btn btn-sm text-primary edit-btn fs-5 me-1" data-id="${data.id}" data-type="students" data-name="${data.name}" data-class="${data.classId}"><i class="bi bi-pencil-square"></i></button>
+           <button class="btn btn-sm text-danger del-btn fs-5" data-id="${data.id}" data-type="students"><i class="bi bi-trash"></i></button>
         </div>
       </li>
     `;
@@ -327,7 +390,7 @@ function attachCrudEvents() {
                 if (b.dataset.type === 'classes') loadClasses();
                 if (b.dataset.type === 'subjects') loadSubjects();
                 if (b.dataset.type === 'books') loadBooks();
-                if (b.dataset.type === 'students') loadStudents();
+                if (b.dataset.type === 'students') loadStudents(); // reloads current class
                 if (b.dataset.type === 'records') loadAdminRecords();
             }
         };
@@ -372,7 +435,7 @@ document.getElementById('saveEditBtn').onclick = async () => {
         if (col === 'classes') loadClasses();
         if (col === 'subjects') loadSubjects();
         if (col === 'books') loadBooks();
-        if (col === 'students') loadStudents();
+        if (col === 'students') loadStudents(); // reloads current open class
     } catch (e) {
         alert("Error updating: " + e.message);
     }
@@ -416,17 +479,33 @@ document.getElementById('addStudentForm').onsubmit = async (e) => {
     e.preventDefault();
     const btn = e.target.querySelector('button');
     btn.disabled = true;
-    const name = document.getElementById('studentName').value;
-    const classId = document.getElementById('studentClass').value;
-    await addDoc(collection(db, "students"), { name, classId, madrasaId });
+    const name = document.getElementById('studentName').value.trim();
+    if (!name || !activeStudentClassId) { btn.disabled = false; return; }
+    await addDoc(collection(db, "students"), { name, classId: activeStudentClassId, madrasaId });
     document.getElementById('studentName').value = '';
     await loadStudents();
     btn.disabled = false;
 };
 
+// Back button: class detail -> class folders
+document.getElementById('btnBackToClassFolders').addEventListener('click', () => {
+    activeStudentClassId = null;
+    activeStudentClassName = null;
+    document.getElementById('studentClassDetailView').classList.add('d-none');
+    document.getElementById('studentClassFoldersView').classList.remove('d-none');
+});
+
 // ============================================
 // RECORDS MANANGEMENT (DUAL-VIEW)
 // ============================================
+
+// Loads ALL students into studentMap for the Records module
+async function loadAllStudentsForRecords() {
+    if (!madrasaId) return;
+    const q = query(collection(db, "students"), where("madrasaId", "==", madrasaId));
+    const snap = await getDocs(q);
+    snap.forEach(d => { studentMap[d.id] = { ...d.data(), id: d.id }; });
+}
 
 // Toggle initial Records view based on Classes
 let activeAdminDateFilter = 'all';

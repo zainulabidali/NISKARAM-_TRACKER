@@ -28,23 +28,25 @@ export function getActiveMadrasaId() {
 // ─── Bottom Navigation ──────────────────────────────────────────────────────
 
 export const injectBottomNav = (activePage) => {
+  let indicatorState = '';
+  if (activePage === 'home') indicatorState = 'nav-indicator-1';
+  else if (activePage === 'history') indicatorState = 'nav-indicator-2';
+  else indicatorState = 'nav-indicator-0';
+
   const navHtml = `
-    <div class="bottom-nav shadow-sm">
-      <a href="home.html" class="nav-item ${activePage === 'home' ? 'active' : ''}">
-        <i class="bi bi-house-door-fill"></i>
-        <span>Home</span>
-      </a>
+    <div class="bottom-nav">
+      <div class="nav-indicator ${indicatorState}"></div>
       <a href="tracker.html" class="nav-item ${activePage === 'tracker' ? 'active' : ''}">
         <i class="bi bi-clipboard-check-fill"></i>
         <span>Tracker</span>
       </a>
+      <a href="home.html" class="nav-item ${activePage === 'home' ? 'active' : ''}">
+        <i class="bi bi-trophy-fill"></i>
+        <span>Leaderboard</span>
+      </a>
       <a href="history.html" class="nav-item ${activePage === 'history' ? 'active' : ''}">
         <i class="bi bi-clock-history"></i>
         <span>History</span>
-      </a>
-      <a href="profile.html" class="nav-item ${activePage === 'profile' ? 'active' : ''}">
-        <i class="bi bi-person-fill"></i>
-        <span>Profile</span>
       </a>
     </div>
   `;

@@ -65,19 +65,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     syncOfflineRecords();
 
     setupDateToggle();
-
-    await loadClasses();
-    await loadStudents();
-    await loadSubjects();
-    await loadBooks();
-
     setupSalawat();
     renderPrayersForm();
     setupPrayerModal();
+
+    // Show the selection modal IMMEDIATELY — no Firebase wait.
+    // The modal contains the class + student pickers, so the user
+    // sees the UI right away instead of a white screen.
+    setupSelectionModal();
+
+    // Now load the data the modal needs (class list + student cards).
+    // Run both in parallel to cut the wait in half.
+    await Promise.all([
+        loadClasses(),
+        loadStudents()
+    ]);
+
+    // Restore any previously selected class/student AFTER the data arrives.
     restoreSelections();
 
-    // Initialize Modal setup if no student is selected yet
-    setupSelectionModal();
+    // Subjects and books are only needed once the main form is visible
+    // (after a student is confirmed). Load them in the background.
+    loadSubjects();
+    loadBooks();
 
     // Bind View Report Button
     const btnReport = document.getElementById('btnViewReport');
