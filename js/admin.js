@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btnCopyMadrasaLink.addEventListener('click', async (e) => {
             e.preventDefault();
             if (madrasaId) {
-                const url = window.location.origin + window.location.pathname.replace('admin.html', 'home.html') + '?m=' + madrasaId;
+                const url = window.location.origin + window.location.pathname.replace('admin.html', 'tracker.html') + '?m=' + madrasaId;
                 try {
                     await navigator.clipboard.writeText(url);
                     const originalHTML = btnCopyMadrasaLink.innerHTML;
@@ -171,7 +171,7 @@ window.closeAdminModule = () => {
 
 async function init() {
     if (madrasaId) {
-        const url = window.location.origin + window.location.pathname.replace('admin.html', 'home.html') + '?m=' + madrasaId;
+        const url = window.location.origin + window.location.pathname.replace('admin.html', 'tracker.html') + '?m=' + madrasaId;
         const linkContainer = document.getElementById('madrasaLinkTextContainer');
         if (linkContainer) {
             linkContainer.textContent = url;

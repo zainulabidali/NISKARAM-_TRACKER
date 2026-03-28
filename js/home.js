@@ -1,7 +1,9 @@
-import { db } from './firebase.js';
+import { db, auth } from './firebase.js';
 import { injectBottomNav } from './app.js';
 import { collection, query, where, getDocs, doc, getDoc, orderBy, limit } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js';
+import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-auth.js';
 
+// Removed onAuthStateChanged to allow shared link bypass
 let madrasaId = null;
 let allClasses = {};
 let classesLoaded = false;
@@ -20,32 +22,35 @@ document.addEventListener('DOMContentLoaded', async () => {
     const mParam = urlParams.get('m');
 
     if (mParam) {
-        localStorage.setItem('activeMadrasaId', mParam);
-        madrasaId = mParam;
-        window.history.replaceState({}, document.title, window.location.pathname);
-    } else {
-        madrasaId = localStorage.getItem('activeMadrasaId');
+        window.location.href = 'tracker.html?m=' + mParam;
+        return;
     }
+    
+    madrasaId = localStorage.getItem('activeMadrasaId');
 
     if (!madrasaId) {
-        document.getElementById('madrasaNameDisplay').innerText = 'Madrasa Niskaram Tracker';
-        renderLeaderboardMessage('No Madrasa selected. Please use the link provided by your admin.');
+        window.location.href = 'login.html';
         return;
     }
 
-    // Load Madrasa Name
-    const docSnap = await getDoc(doc(db, 'madrasas', madrasaId));
-    if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data.status !== 'active') {
-            document.getElementById('madrasaNameDisplay').innerText = 'Inactive Madrasa';
+    try {
+        const docSnap = await getDoc(doc(db, 'madrasas', madrasaId));
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data.status !== 'active') {
+                localStorage.removeItem('activeMadrasaId');
+                window.location.href = 'login.html';
+                return;
+            }
+            document.getElementById('madrasaNameDisplay').innerText = data.name;
+        } else {
+            localStorage.removeItem('activeMadrasaId');
+            window.location.href = 'login.html';
             return;
         }
-        document.getElementById('madrasaNameDisplay').innerText = data.name;
-    } else {
-        localStorage.removeItem('activeMadrasaId');
-        document.getElementById('madrasaNameDisplay').innerText = 'Madrasa Not Found';
-        return;
+    } catch (e) {
+        document.getElementById('madrasaNameDisplay').innerText = 'Madrasa Tracker';
+        console.error("Offline check");
     }
 
     setupClassFilter();

@@ -49,8 +49,20 @@
 
     <script type="module">
         import { auth, db } from './js/firebase.js';
-        import { signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-auth.js';
+        import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-auth.js';
         import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js';
+
+        // Redirect if already logged in
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // Keep Super Admin route intact, but route regular logged-in users to admin dashboard
+                if (user.uid === 'mt0k0d3UeAgcB8RTzq5k3M97UKa2') {
+                    window.location.href = 'superadmin.html';
+                } else {
+                    window.location.href = 'admin.html';
+                }
+            }
+        });
 
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -76,7 +88,7 @@
                 // Fetch role for Madrasa Admin
                 const adminDoc = await getDoc(doc(db, "admins", user.uid));
                 if (adminDoc.exists()) {
-                    window.location.href = 'admin.html'; // Madrasa Admins go to Settings Panel directly
+                    window.location.href = 'admin.html'; // Madrasa Admins go to Admin Dashboard
                 } else {
                     // Normal user without an admin doc
                     await signOut(auth);

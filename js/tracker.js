@@ -1,6 +1,9 @@
-import { db } from './firebase.js';
+import { db, auth } from './firebase.js';
 import { injectBottomNav } from './app.js';
 import { collection, query, where, getDocs, setDoc, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js';
+import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-auth.js';
+
+// Removed onAuthStateChanged to allow shared link bypass
 
 let madrasaId = null;
 let studentsData = {};
@@ -34,29 +37,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (!madrasaId) {
-        // Show friendly message — tracker requires a madrasa context
-        document.getElementById('classSelect').innerHTML = '<option>— No Madrasa —</option>';
-        document.getElementById('classSelect').disabled = true;
-        const selectEl = document.getElementById('studentSelect');
-        if (selectEl && !selectEl.value) {
-            document.getElementById('studentSelect').disabled = true;
-        }
-
-        const trackerForm = document.getElementById('trackerForm');
-        if (trackerForm) trackerForm.classList.add('d-none');
-
-        const notice = document.createElement('div');
-        notice.className = 'alert alert-light border shadow-sm text-center text-muted fw-bold mt-3';
-        notice.innerHTML = '<i class="bi bi-person-lock me-2"></i>Please use the Madrasa Link provided by your admin.';
-        document.querySelector('.container')?.prepend(notice);
+        window.location.href = 'login.html';
         return;
     }
 
     // Check active status to be safe
     try {
         const docSnap = await getDoc(doc(db, "madrasas", madrasaId));
-        if (docSnap.exists() && docSnap.data().status !== 'active') {
-            alert("This Madrasa's subscription is inactive.");
+        if (!docSnap.exists() || docSnap.data().status !== 'active') {
+            localStorage.removeItem('activeMadrasaId');
+            window.location.href = 'login.html';
             return;
         }
     } catch (e) { /* ignore offline read errors for this check */ }

@@ -1,7 +1,9 @@
-﻿import { db } from './firebase.js';
+import { db, auth } from './firebase.js';
 import { injectBottomNav } from './app.js';
 import { collection, query, where, getDocs, doc, getDoc, orderBy, limit, startAfter } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js';
+import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-auth.js';
 
+// Removed onAuthStateChanged to allow shared link bypass
 let madrasaId = null;
 let allRecords = [];
 let allStudents = {};
@@ -19,22 +21,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     const mParam = urlParams.get('m');
 
     if (mParam) {
-        localStorage.setItem('activeMadrasaId', mParam);
-        madrasaId = mParam;
-        window.history.replaceState({}, document.title, window.location.pathname);
-    } else {
-        madrasaId = localStorage.getItem('activeMadrasaId');
+        window.location.href = 'tracker.html?m=' + mParam;
+        return;
     }
+    
+    madrasaId = localStorage.getItem('activeMadrasaId');
 
     if (!madrasaId) {
-        renderMessage('No Madrasa selected. Please use the Madrasa link provided by your admin.');
+        window.location.href = 'login.html';
         return;
     }
 
     try {
         const docSnap = await getDoc(doc(db, 'madrasas', madrasaId));
-        if (docSnap.exists() && docSnap.data().status !== 'active') {
-            alert("This Madrasa's subscription is inactive.");
+        if (!docSnap.exists() || docSnap.data().status !== 'active') {
+            localStorage.removeItem('activeMadrasaId');
+            window.location.href = 'login.html';
             return;
         }
     } catch (e) {
