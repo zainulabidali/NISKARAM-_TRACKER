@@ -76,7 +76,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Subjects and books are only needed once the main form is visible
     // (after a student is confirmed). Load them in the background.
-    loadSubjects();
     loadBooks();
 
     // Bind View Report Button
@@ -160,9 +159,10 @@ async function loadStudents() {
     }
 }
 
-async function loadSubjects() {
+async function loadSubjects(classId) {
     const container = document.getElementById('subjectsContainer');
-    const q = query(collection(db, "subjects"), where("madrasaId", "==", madrasaId));
+    if (!classId) return;
+    const q = query(collection(db, "subjects"), where("madrasaId", "==", madrasaId), where("classId", "==", classId));
     try {
         const snap = await getDocs(q);
         subjectsList = [];
@@ -422,6 +422,9 @@ async function refreshStudentSummary(studentId) {
 
     // Visually update prayer UI
     renderPrayersForm();
+
+    // Load subjects for THIS student's class
+    loadSubjects(student.classId);
 }
 
 function setupSalawat() {
