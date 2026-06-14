@@ -1,6 +1,6 @@
 import { auth, db } from './firebase.js';
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-auth.js';
-import { collection, query, where, getDocs, addDoc, deleteDoc, doc, updateDoc, getDoc, writeBatch } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js'; 
+import { collection, query, where, getDocs, addDoc, deleteDoc, doc, updateDoc, getDoc, writeBatch, setDoc } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js'; 
 
 let madrasaId = null;
 let classMap = {};
@@ -182,6 +182,70 @@ async function init() {
     await loadSubjects();
     await loadBooks();
     await loadAnnouncementsBanner();
+    await migrateStudentsWithoutAdmissionNumbers();
+}
+
+async function migrateStudentsWithoutAdmissionNumbers() {
+    if (!madrasaId) return;
+    try {
+        const q = query(collection(db, "students"), where("madrasaId", "==", madrasaId));
+        const snap = await getDocs(q);
+        
+        let migratedCount = 0;
+        let index = 1001;
+        
+        // Find existing used admission numbers to prevent collisions
+        const lookupQ = query(collection(db, "admission_numbers"), where("madrasaId", "==", madrasaId));
+        const lookupSnap = await getDocs(lookupQ);
+        const existingNumbers = new Set();
+        lookupSnap.forEach(d => existingNumbers.add(d.id));
+
+        for (const studentDoc of snap.docs) {
+            const student = studentDoc.data();
+            if (!student.admission_number) {
+                // Generate a unique admission number
+                let generated = "";
+                do {
+                    generated = `ADM-${index}`;
+                    index++;
+                } while (existingNumbers.has(generated));
+                
+                existingNumbers.add(generated);
+
+                console.log(`Migrating student ${student.name} to Admission Number: ${generated}`);
+
+                // Update student doc
+                await updateDoc(doc(db, "students", studentDoc.id), {
+                    admission_number: generated
+                });
+
+                // Create lookup doc
+                await setDoc(doc(db, "admission_numbers", generated), {
+                    studentId: studentDoc.id,
+                    classId: student.classId,
+                    madrasaId: madrasaId
+                });
+
+                migratedCount++;
+            } else {
+                // Double-check if the lookup document exists. If not, recreate it.
+                const lookupRef = doc(db, "admission_numbers", student.admission_number);
+                const lookupCheck = await getDoc(lookupRef);
+                if (!lookupCheck.exists()) {
+                    await setDoc(lookupRef, {
+                        studentId: studentDoc.id,
+                        classId: student.classId,
+                        madrasaId: madrasaId
+                    });
+                }
+            }
+        }
+        if (migratedCount > 0) {
+            console.log(`Successfully migrated ${migratedCount} students with new unique admission numbers.`);
+        }
+    } catch(err) {
+        console.error("Migration error: ", err);
+    }
 }
 
 async function loadClasses() {
@@ -367,10 +431,13 @@ async function loadStudents() {
       <li class="list-group-item d-flex justify-content-between align-items-center bg-white border rounded-4 p-3 mb-1 shadow-sm">
         <div class="d-flex align-items-center gap-3">
            <div class="avatar bg-success bg-opacity-10 text-success fw-bold text-center rounded-circle d-flex align-items-center justify-content-center" style="width:38px;height:38px;font-size:1rem;">${data.name.charAt(0).toUpperCase()}</div>
-           <span class="fw-bold text-dark">${data.name}</span>
+           <div>
+               <span class="fw-bold text-dark d-block">${data.name}</span>
+               <small class="text-muted fw-bold">Admission: ${data.admission_number || 'None'}</small>
+           </div>
         </div>
         <div>
-           <button class="btn btn-sm text-primary edit-btn fs-5 me-1" data-id="${data.id}" data-type="students" data-name="${data.name}" data-class="${data.classId}"><i class="bi bi-pencil-square"></i></button>
+           <button class="btn btn-sm text-primary edit-btn fs-5 me-1" data-id="${data.id}" data-type="students" data-name="${data.name}" data-class="${data.classId}" data-admission="${data.admission_number || ''}"><i class="bi bi-pencil-square"></i></button>
            <button class="btn btn-sm text-danger del-btn fs-5" data-id="${data.id}" data-type="students"><i class="bi bi-trash"></i></button>
         </div>
       </li>
@@ -385,6 +452,14 @@ function attachCrudEvents() {
     document.querySelectorAll('.del-btn').forEach(b => {
         b.onclick = async () => {
             if (confirm(`Delete this ${b.dataset.type.slice(0, -1)}?`)) {
+                if (b.dataset.type === 'students') {
+                    const studentData = studentMap[b.dataset.id];
+                    if (studentData && studentData.admission_number) {
+                        try {
+                            await deleteDoc(doc(db, "admission_numbers", studentData.admission_number));
+                        } catch(e) { console.error("Error deleting lookup doc:", e); }
+                    }
+                }
                 await deleteDoc(doc(db, b.dataset.type, b.dataset.id));
                 // Reload correct panel
                 if (b.dataset.type === 'classes') loadClasses();
@@ -405,11 +480,18 @@ function attachCrudEvents() {
             document.getElementById('editCollection').value = b.dataset.type;
             document.getElementById('editName').value = b.dataset.name;
 
-            if (b.dataset.type === 'students' || b.dataset.type === 'subjects') {
+            if (b.dataset.type === 'students') {
                 document.getElementById('classEditFields').classList.remove('d-none');
                 document.getElementById('editClass').value = b.dataset.class;
+                document.getElementById('studentEditFields').classList.remove('d-none');
+                document.getElementById('editAdmissionNumber').value = b.dataset.admission || '';
+            } else if (b.dataset.type === 'subjects') {
+                document.getElementById('classEditFields').classList.remove('d-none');
+                document.getElementById('editClass').value = b.dataset.class;
+                document.getElementById('studentEditFields').classList.add('d-none');
             } else {
                 document.getElementById('classEditFields').classList.add('d-none');
+                document.getElementById('studentEditFields').classList.add('d-none');
             }
 
             document.getElementById('editModalTitle').innerText = `Edit ${b.dataset.type.slice(0, -1)}`;
@@ -425,12 +507,60 @@ document.getElementById('saveEditBtn').onclick = async () => {
     const newName = document.getElementById('editName').value;
 
     const payload = { name: newName };
-    if (col === 'students' || col === 'subjects') {
+    if (col === 'students') {
+        payload.classId = document.getElementById('editClass').value;
+        const newAdmission = document.getElementById('editAdmissionNumber').value.trim();
+        if (!newAdmission) {
+            alert("Admission Number is required!");
+            return;
+        }
+
+        // Check if admission number changed
+        const currentStudent = studentMap[id];
+        const oldAdmission = currentStudent ? currentStudent.admission_number : null;
+
+        if (newAdmission !== oldAdmission) {
+            // Check uniqueness of newAdmission
+            const lookupSnap = await getDoc(doc(db, "admission_numbers", newAdmission));
+            if (lookupSnap.exists() && lookupSnap.data().studentId !== id) {
+                alert("Duplicate Admission Number detected! Please choose a unique one.");
+                return;
+            }
+            payload.admission_number = newAdmission;
+
+            // Update lookup tables:
+            // 1. Delete old lookup document
+            if (oldAdmission) {
+                try {
+                    await deleteDoc(doc(db, "admission_numbers", oldAdmission));
+                } catch(e) { console.error("Error deleting old lookup doc:", e); }
+            }
+            // 2. Create new lookup document
+            await setDoc(doc(db, "admission_numbers", newAdmission), {
+                studentId: id,
+                classId: payload.classId,
+                madrasaId: madrasaId
+            });
+        } else {
+            // Ensure lookup doc is synced with classId/madrasaId
+            await setDoc(doc(db, "admission_numbers", newAdmission), {
+                studentId: id,
+                classId: payload.classId,
+                madrasaId: madrasaId
+            }, { merge: true });
+        }
+    } else if (col === 'subjects') {
         payload.classId = document.getElementById('editClass').value;
     }
 
     try {
         await updateDoc(doc(db, col, id), payload);
+        
+        // Update local map cache
+        if (col === 'students' && studentMap[id]) {
+            studentMap[id] = { ...studentMap[id], ...payload };
+        }
+
         editModal.hide();
         if (col === 'classes') loadClasses();
         if (col === 'subjects') loadSubjects();
@@ -480,11 +610,41 @@ document.getElementById('addStudentForm').onsubmit = async (e) => {
     const btn = e.target.querySelector('button');
     btn.disabled = true;
     const name = document.getElementById('studentName').value.trim();
-    if (!name || !activeStudentClassId) { btn.disabled = false; return; }
-    await addDoc(collection(db, "students"), { name, classId: activeStudentClassId, madrasaId });
-    document.getElementById('studentName').value = '';
-    await loadStudents();
-    btn.disabled = false;
+    const admissionNumber = document.getElementById('studentAdmissionNumber').value.trim();
+    if (!name || !admissionNumber || !activeStudentClassId) { btn.disabled = false; return; }
+
+    try {
+        // Check uniqueness in lookup collection
+        const lookupSnap = await getDoc(doc(db, "admission_numbers", admissionNumber));
+        if (lookupSnap.exists()) {
+            alert("Duplicate Admission Number detected! Please choose a unique one.");
+            btn.disabled = false;
+            return;
+        }
+
+        // Add student
+        const newStuRef = await addDoc(collection(db, "students"), {
+            name,
+            admission_number: admissionNumber,
+            classId: activeStudentClassId,
+            madrasaId
+        });
+
+        // Add to lookup collection
+        await setDoc(doc(db, "admission_numbers", admissionNumber), {
+            studentId: newStuRef.id,
+            classId: activeStudentClassId,
+            madrasaId
+        });
+
+        document.getElementById('studentName').value = '';
+        document.getElementById('studentAdmissionNumber').value = '';
+        await loadStudents();
+    } catch(err) {
+        alert("Failed to add student: " + err.message);
+    } finally {
+        btn.disabled = false;
+    }
 };
 
 // Back button: class detail -> class folders

@@ -16,6 +16,12 @@ const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric
 document.getElementById('todayDate').innerText = new Date().toLocaleDateString('en-US', options);
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // Parent Route Protection
+    if (sessionStorage.getItem('parentStudentId')) {
+        window.location.href = 'parent_dashboard.html';
+        return;
+    }
+
     injectBottomNav('home');
 
     const urlParams = new URLSearchParams(window.location.search);

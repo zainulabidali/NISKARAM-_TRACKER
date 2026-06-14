@@ -12,6 +12,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const urlParams = new URLSearchParams(window.location.search);
     studentId = urlParams.get('s');
 
+    // Parent Route Protection
+    const parentStudentId = sessionStorage.getItem('parentStudentId');
+    if (parentStudentId && parentStudentId !== studentId) {
+        window.location.href = 'parent_dashboard.html';
+        return;
+    }
+
     if (!madrasaId || !studentId) {
         alert("Missing student or madrasa context. Returning to tracker.");
         window.history.back();

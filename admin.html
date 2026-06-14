@@ -193,12 +193,22 @@
                         </div>
 
                         <!-- Add Student Form (only shown inside a class) -->
-                        <form id="addStudentForm" class="d-flex gap-2 mb-4 align-items-end">
-                            <input type="text" id="studentName" class="form-control bg-light border-0 flex-grow-1"
-                                placeholder="Student Name" required>
-                            <button type="submit" class="btn btn-success shadow-sm px-4 rounded-pill fw-bold">
-                                <i class="bi bi-plus-lg me-1"></i>Add
-                            </button>
+                        <form id="addStudentForm" class="row g-2 mb-4 align-items-end">
+                            <div class="col-md-6">
+                                <label class="form-label text-muted small fw-bold mb-1">Student Name</label>
+                                <input type="text" id="studentName" class="form-control bg-light border-0"
+                                    placeholder="Student Name" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label text-muted small fw-bold mb-1">Admission Number</label>
+                                <input type="text" id="studentAdmissionNumber" class="form-control bg-light border-0"
+                                    placeholder="Admission Number (e.g. A001)" required>
+                            </div>
+                            <div class="col-md-2">
+                                <button type="submit" class="btn btn-success shadow-sm w-100 rounded-pill fw-bold" style="height: 38px;">
+                                    <i class="bi bi-plus-lg me-1"></i>Add
+                                </button>
+                            </div>
                         </form>
 
                         <ul class="list-group list-group-flush gap-2" id="studentsList"></ul>
@@ -346,6 +356,11 @@
                     <div id="classEditFields" class="d-none">
                         <label class="form-label text-muted fw-bold small">Class</label>
                         <select id="editClass" class="form-select bg-light border-0 mb-3"></select>
+                    </div>
+
+                    <div id="studentEditFields" class="d-none">
+                        <label class="form-label text-muted fw-bold small">Admission Number</label>
+                        <input type="text" id="editAdmissionNumber" class="form-control bg-light border-0 mb-3">
                     </div>
 
                     <button class="btn btn-primary w-100 rounded-pill py-2 fw-bold" id="saveEditBtn">Save

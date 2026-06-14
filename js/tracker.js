@@ -1,7 +1,7 @@
 import { db, auth } from './firebase.js';
 import { injectBottomNav } from './app.js';
 import { collection, query, where, getDocs, setDoc, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js';
-import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-auth.js';
+import { onAuthStateChanged, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-auth.js';
 
 // Removed onAuthStateChanged to allow shared link bypass
 
@@ -23,60 +23,59 @@ yday.setDate(yday.getDate() - 1);
 const yesterdayStr = yday.toISOString().slice(0, 10);
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // If a parent is already logged in
+    const activeParentId = sessionStorage.getItem('parentStudentId');
+    const activeAdmission = sessionStorage.getItem('parentAdmissionNumber');
+    madrasaId = sessionStorage.getItem('activeMadrasaId');
+
     injectBottomNav('tracker');
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const mParam = urlParams.get('m');
-
-    if (mParam) {
-        localStorage.setItem('activeMadrasaId', mParam);
-        madrasaId = mParam;
-        window.history.replaceState({}, document.title, window.location.pathname);
-    } else {
-        madrasaId = localStorage.getItem('activeMadrasaId');
-    }
-
-    if (!madrasaId) {
-        window.location.href = 'login.html';
-        return;
-    }
-
-    // Check active status to be safe
-    try {
-        const docSnap = await getDoc(doc(db, "madrasas", madrasaId));
-        if (!docSnap.exists() || docSnap.data().status !== 'active') {
-            localStorage.removeItem('activeMadrasaId');
-            window.location.href = 'login.html';
-            return;
-        }
-    } catch (e) { /* ignore offline read errors for this check */ }
 
     setupNetworkStatus();
     syncOfflineRecords();
-
     setupDateToggle();
     setupSalawat();
     renderPrayersForm();
     setupPrayerModal();
 
-    // Show the selection modal IMMEDIATELY — no Firebase wait.
-    // The modal contains the class + student pickers, so the user
-    // sees the UI right away instead of a white screen.
-    setupSelectionModal();
+    if (activeParentId && activeAdmission && madrasaId) {
+        // Fetch specific student profile and refresh tracker directly
+        try {
+            const stuSnap = await getDoc(doc(db, "students", activeParentId));
+            if (stuSnap.exists()) {
+                studentsData[activeParentId] = stuSnap.data();
+                document.getElementById('studentSelect').value = activeParentId;
+                const trackerContainer = document.getElementById('trackerMainContainer');
+                if (trackerContainer) trackerContainer.classList.remove('d-none');
+                
+                await refreshStudentSummary(activeParentId);
+                await loadBooks();
+            } else {
+                // If student no longer exists, clear session and show modal
+                sessionStorage.clear();
+                setupSelectionModal();
+            }
+        } catch(err) {
+            console.error("Offline or error loading saved student", err);
+            // Show modal if check fails
+            setupSelectionModal();
+        }
+    } else {
+        const urlParams = new URLSearchParams(window.location.search);
+        const mParam = urlParams.get('m');
+        if (mParam) {
+            localStorage.setItem('activeMadrasaId', mParam);
+            madrasaId = mParam;
+        } else {
+            madrasaId = localStorage.getItem('activeMadrasaId');
+        }
 
-    // Now load the data the modal needs (class list + student cards).
-    // Run both in parallel to cut the wait in half.
-    await Promise.all([
-        loadClasses(),
-        loadStudents()
-    ]);
+        if (!madrasaId) {
+            window.location.href = 'login.html';
+            return;
+        }
 
-    // Restore any previously selected class/student AFTER the data arrives.
-    restoreSelections();
-
-    // Subjects and books are only needed once the main form is visible
-    // (after a student is confirmed). Load them in the background.
-    loadBooks();
+        setupSelectionModal();
+    }
 
     // Bind View Report Button
     const btnReport = document.getElementById('btnViewReport');
@@ -84,9 +83,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         btnReport.addEventListener('click', () => {
             const sid = document.getElementById('studentSelect').value;
             if (sid) {
-                window.location.href = `report.html?s=${sid}`;
+                // Redirect directly to the secure parent dashboard!
+                window.location.href = `parent_dashboard.html`;
             } else {
-                alert("Please select a student first.");
+                alert("Please verify your Admission Number first.");
             }
         });
     }
@@ -96,16 +96,77 @@ let selectionModalInstance = null;
 function setupSelectionModal() {
     selectionModalInstance = new bootstrap.Modal(document.getElementById('studentSelectionModal'));
 
-    // Bind Continue Button
-    const btnContinue = document.getElementById('btnContinueTracker');
-    if (btnContinue) {
-        btnContinue.addEventListener('click', () => {
-            const selectEl = document.getElementById('studentSelect');
-            if (selectEl && selectEl.value) {
+    const btnVerify = document.getElementById('btnVerifyAdmission');
+    if (btnVerify) {
+        btnVerify.addEventListener('click', async () => {
+            const inputVal = document.getElementById('parentAdmissionInput').value.trim();
+            const errorMsg = document.getElementById('modalErrorMsg');
+            
+            if (!inputVal) {
+                errorMsg.innerText = "Please enter an Admission Number.";
+                errorMsg.classList.remove('d-none');
+                return;
+            }
+
+            btnVerify.disabled = true;
+            btnVerify.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Checking...';
+            errorMsg.classList.add('d-none');
+
+            try {
+                // 1. Validate Admission Number
+                const lookupSnap = await getDoc(doc(db, "admission_numbers", inputVal));
+                if (!lookupSnap.exists()) {
+                    throw new Error("Admission Number Not Found");
+                }
+
+                const data = lookupSnap.data();
+
+                // 2. Sign in anonymously if not logged in
+                let user = auth.currentUser;
+                if (!user) {
+                    const userCredential = await signInAnonymously(auth);
+                    user = userCredential.user;
+                }
+
+                // 3. Write to parent_sessions
+                await setDoc(doc(db, "parent_sessions", user.uid), {
+                    studentId: data.studentId,
+                    admissionNumber: inputVal,
+                    createdAt: new Date().toISOString()
+                });
+
+                // 4. Save session context
+                sessionStorage.setItem('parentStudentId', data.studentId);
+                sessionStorage.setItem('parentAdmissionNumber', inputVal);
+                sessionStorage.setItem('activeMadrasaId', data.madrasaId);
+                madrasaId = data.madrasaId;
+
+                // 5. Fetch student profile
+                const stuSnap = await getDoc(doc(db, "students", data.studentId));
+                if (stuSnap.exists()) {
+                    studentsData[data.studentId] = stuSnap.data();
+                } else {
+                    throw new Error("Student profile could not be found.");
+                }
+
+                // 6. Initialize tracker state
+                document.getElementById('studentSelect').value = data.studentId;
+                
+                // Hide modal and show tracker
                 selectionModalInstance.hide();
                 const trackerContainer = document.getElementById('trackerMainContainer');
                 if (trackerContainer) trackerContainer.classList.remove('d-none');
-                refreshStudentSummary(selectEl.value);
+                
+                // Load child items
+                refreshStudentSummary(data.studentId);
+                loadBooks();
+
+            } catch (err) {
+                errorMsg.innerText = err.message || "Invalid Admission Number";
+                errorMsg.classList.remove('d-none');
+            } finally {
+                btnVerify.disabled = false;
+                btnVerify.innerHTML = 'View Record <i class="bi bi-arrow-right ms-1"></i>';
             }
         });
     }
@@ -127,36 +188,6 @@ function setupNetworkStatus() {
     window.addEventListener('online', updateOnlineStatus);
     window.addEventListener('offline', updateOnlineStatus);
     updateOnlineStatus();
-}
-
-async function loadClasses() {
-    const selectModal = document.getElementById('classSelectModal');
-    const q = query(collection(db, "classes"), where("madrasaId", "==", madrasaId));
-    try {
-        const snap = await getDocs(q);
-        snap.forEach(d => {
-            selectModal.innerHTML += `<option value="${d.id}">${d.data().name}</option>`;
-        });
-    } catch (err) {
-        console.error("Classes load error", err);
-    }
-
-    selectModal.addEventListener('change', (e) => {
-        localStorage.setItem("selectedClass", e.target.value);
-        populateStudentsDropdown(e.target.value);
-    });
-}
-
-async function loadStudents() {
-    const q = query(collection(db, "students"), where("madrasaId", "==", madrasaId));
-    try {
-        const snap = await getDocs(q);
-        snap.forEach(d => {
-            studentsData[d.id] = d.data();
-        });
-    } catch (err) {
-        console.error(err);
-    }
 }
 
 async function loadSubjects(classId) {
@@ -248,92 +279,6 @@ function setupDateToggle() {
     });
 }
 
-function populateStudentsDropdown(classId) {
-    const container = document.getElementById('studentCardsContainerModal');
-    const badge = document.getElementById('studentCountBadgeModal');
-    const hiddenSelect = document.getElementById('studentSelect');
-    const continueBtn = document.getElementById('btnContinueTracker');
-
-    if (container) container.innerHTML = '';
-    if (hiddenSelect) hiddenSelect.value = '';
-    if (continueBtn) continueBtn.classList.add('d-none');
-
-    if (!classId) {
-        if (badge) badge.innerText = "0";
-        if (container) container.innerHTML = '<div class="text-muted small p-4 text-center bg-white shadow-sm rounded-4 border border-light">Please select a class first.</div>';
-        return;
-    }
-
-    let count = 0;
-    Object.keys(studentsData).forEach(id => {
-        if (studentsData[id].classId === classId) {
-            count++;
-            const name = studentsData[id].name;
-            const letter = name.charAt(0).toUpperCase();
-
-            const card = document.createElement('div');
-            card.className = "card border border-light shadow-sm rounded-4 text-start student-card bg-white";
-            card.style.cursor = "pointer";
-            card.dataset.id = id;
-            card.innerHTML = `
-                <div class="card-body p-3 d-flex align-items-center gap-3">
-                    <div class="avatar bg-primary text-white rounded-circle d-flex align-items-center justify-content-center fw-bold shadow-sm" style="width: 45px; height: 45px; font-size: 1.1rem;">${letter}</div>
-                    <div class="h6 mb-0 fw-bold text-dark flex-grow-1">${name}</div>
-                    <i class="bi bi-circle text-muted fs-4 check-icon"></i>
-                </div>
-            `;
-
-            card.addEventListener('click', () => {
-                // reset all cards visually
-                document.querySelectorAll('.student-card').forEach(c => {
-                    c.classList.remove('border-primary', 'bg-primary', 'bg-opacity-10');
-                    c.classList.add('border-light', 'bg-white');
-                    c.querySelector('.check-icon').classList.replace('bi-check-circle-fill', 'bi-circle');
-                    c.querySelector('.check-icon').classList.replace('text-primary', 'text-muted');
-                });
-                // activate this card
-                card.classList.remove('border-light', 'bg-white');
-                card.classList.add('border-primary', 'bg-primary', 'bg-opacity-10');
-                card.querySelector('.check-icon').classList.replace('bi-circle', 'bi-check-circle-fill');
-                card.querySelector('.check-icon').classList.replace('text-muted', 'text-primary');
-
-                if (hiddenSelect) hiddenSelect.value = id;
-                localStorage.setItem("selectedStudent", id);
-                if (continueBtn) continueBtn.classList.remove('d-none');
-            });
-
-            if (container) container.appendChild(card);
-        }
-    });
-
-    if (badge) badge.innerText = count;
-
-    if (count === 0 && container) {
-        container.innerHTML = '<div class="text-muted small p-4 text-center bg-white shadow-sm rounded-4 border border-light">No students in this class.</div>';
-    }
-}
-
-function restoreSelections() {
-    const classId = localStorage.getItem("selectedClass");
-    if (classId) {
-        const selectModal = document.getElementById('classSelectModal');
-        if (selectModal) selectModal.value = classId;
-        populateStudentsDropdown(classId);
-
-        setTimeout(() => {
-            const studentId = localStorage.getItem("selectedStudent");
-            if (studentId) {
-                const card = document.querySelector(`.student-card[data-id="${studentId}"]`);
-                if (card) {
-                    card.click();
-                    // We DO NOT close the modal or reveal the container here.
-                    // The user must explicitly press 'Continue to Tracker'.
-                }
-            }
-        }, 500);
-    }
-}
-
 async function refreshStudentSummary(studentId) {
     const student = studentsData[studentId];
     if (!student) return;
@@ -343,10 +288,14 @@ async function refreshStudentSummary(studentId) {
     document.getElementById('summaryAvatar').innerText = student.name.charAt(0).toUpperCase();
 
     // Find class
-    const classSelect = document.getElementById('classSelectModal');
     let className = 'Class';
-    for (let o of classSelect.options) {
-        if (o.value === student.classId) className = o.text;
+    if (student.classId) {
+        try {
+            const classDoc = await getDoc(doc(db, "classes", student.classId));
+            if (classDoc.exists()) {
+                className = classDoc.data().name || 'Class';
+            }
+        } catch(e) { console.error("Error fetching class name:", e); }
     }
     document.getElementById('summaryClass').innerText = className;
 

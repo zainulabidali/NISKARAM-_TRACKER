@@ -4,36 +4,202 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Madrasa Tracker</title>
+    <title>Parent Portal - Madrasa Tracker</title>
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="css/style.css">
     <style>
         body {
             display: flex;
             align-items: center;
             justify-content: center;
-            height: 100vh;
-            background-color: var(--primary-green);
-            color: white;
+            min-height: 100vh;
+            background: linear-gradient(135deg, var(--primary-green, #155e4d) 0%, #104033 100%);
             margin: 0;
-            padding: 0;
+            padding: 20px;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+
+        .portal-card {
+            width: 100%;
+            max-width: 450px;
+            padding: 40px 30px;
+            border-radius: 24px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+            transform: translateY(0);
+            transition: all 0.3s ease;
+        }
+
+        .portal-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+        }
+
+        .input-group-custom {
+            position: relative;
+            margin-bottom: 24px;
+        }
+
+        .input-group-custom input {
+            width: 100%;
+            padding: 14px 20px 14px 50px;
+            border-radius: 12px;
+            border: 2px solid #e2e8f0;
+            background-color: #f8fafc;
+            font-weight: 600;
+            color: #1e293b;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .input-group-custom input:focus {
+            border-color: var(--primary-green, #155e4d);
+            background-color: #ffffff;
+            box-shadow: 0 0 0 4px rgba(21, 94, 77, 0.15);
+        }
+
+        .input-group-custom i {
+            position: absolute;
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #94a3b8;
+            font-size: 1.2rem;
+            transition: color 0.2s ease;
+        }
+
+        .input-group-custom input:focus + i {
+            color: var(--primary-green, #155e4d);
+        }
+
+        .btn-submit {
+            padding: 14px;
+            border-radius: 12px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            background: linear-gradient(135deg, var(--primary-green, #155e4d) 0%, #1f7a63 100%);
+            border: none;
+            color: white;
+            box-shadow: 0 10px 20px rgba(21, 94, 77, 0.2);
+            transition: all 0.2s ease;
+        }
+
+        .btn-submit:hover {
+            background: linear-gradient(135deg, #1f7a63 0%, var(--primary-green, #155e4d) 100%);
+            box-shadow: 0 12px 24px rgba(21, 94, 77, 0.3);
+            transform: translateY(-1px);
+        }
+
+        .btn-submit:active {
+            transform: translateY(1px);
+        }
+
+        .logo-icon {
+            font-size: 3rem;
+            background: linear-gradient(135deg, var(--primary-green, #155e4d), #28a98a);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 15px;
         }
     </style>
 </head>
 
 <body>
 
-    <div class="text-center">
-        <div class="spinner-border text-light mb-3" role="status">
-            <span class="visually-hidden">Loading...</span>
+    <div class="portal-card">
+        <div class="text-center mb-4">
+            <i class="bi bi-shield-lock-fill logo-icon"></i>
+            <h3 class="fw-bold text-dark mb-1">Parent Portal</h3>
+            <p class="text-muted small">Enter your child's admission details to view reports</p>
         </div>
-        <h2>Madrasa Tracker</h2>
-        <p>Loading application...</p>
+
+        <form id="portalForm">
+            <div class="input-group-custom">
+                <input type="text" id="admissionNumber" placeholder="Enter Admission Number" required autocomplete="off">
+                <i class="bi bi-person-badge"></i>
+            </div>
+
+            <button type="submit" class="btn btn-submit w-100 d-flex align-items-center justify-content-center gap-2" id="submitBtn">
+                <span>View Student Record</span>
+                <i class="bi bi-arrow-right"></i>
+            </button>
+
+            <div id="errorMsg" class="alert alert-danger mt-3 text-center d-none py-2 fs-6 rounded-3"></div>
+        </form>
+
+        <div class="text-center mt-4 border-top pt-3">
+            <a href="login.html" class="text-decoration-none text-muted small fw-semibold"><i class="bi bi-person-workspace me-1"></i>Usthad/Teacher Login</a>
+        </div>
     </div>
 
-    <script>
-        window.location.replace('login.html');
+    <script type="module">
+        import { auth, db } from './js/firebase.js';
+        import { signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-auth.js';
+        import { doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js';
+
+        // Check if already authenticated (either as admin or parent)
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                // If it's a parent session
+                const parentStudentId = sessionStorage.getItem('parentStudentId');
+                if (parentStudentId) {
+                    window.location.href = 'parent_dashboard.html';
+                }
+            }
+        });
+
+        document.getElementById('portalForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const admissionNumber = document.getElementById('admissionNumber').value.trim();
+            const errorMsg = document.getElementById('errorMsg');
+            const submitBtn = document.getElementById('submitBtn');
+
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Validating...';
+            errorMsg.classList.add('d-none');
+
+            try {
+                // Step 1: Validate admission number via lookup doc
+                const lookupSnap = await getDoc(doc(db, "admission_numbers", admissionNumber));
+                if (!lookupSnap.exists()) {
+                    throw new Error("Invalid Admission Number. Student record not found.");
+                }
+
+                const data = lookupSnap.data();
+
+                // Step 2: Sign in anonymously if not logged in
+                let user = auth.currentUser;
+                if (!user) {
+                    const userCredential = await signInAnonymously(auth);
+                    user = userCredential.user;
+                }
+
+                // Step 3: Write to parent_sessions
+                await setDoc(doc(db, "parent_sessions", user.uid), {
+                    studentId: data.studentId,
+                    admissionNumber: admissionNumber,
+                    createdAt: new Date().toISOString()
+                });
+
+                // Step 4: Save session context
+                sessionStorage.setItem('parentStudentId', data.studentId);
+                sessionStorage.setItem('parentAdmissionNumber', admissionNumber);
+                sessionStorage.setItem('activeMadrasaId', data.madrasaId);
+
+                // Step 5: Route to parent dashboard
+                window.location.href = 'parent_dashboard.html';
+
+            } catch (error) {
+                errorMsg.innerText = error.message;
+                errorMsg.classList.remove('d-none');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<span>View Student Record</span><i class="bi bi-arrow-right"></i>';
+            }
+        });
     </script>
 </body>
 

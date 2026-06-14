@@ -15,6 +15,12 @@ let hasMoreRecords = false;
 let activeClassId = '';
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // Parent Route Protection
+    if (sessionStorage.getItem('parentStudentId')) {
+        window.location.href = 'parent_dashboard.html';
+        return;
+    }
+
     injectBottomNav('history');
 
     const urlParams = new URLSearchParams(window.location.search);

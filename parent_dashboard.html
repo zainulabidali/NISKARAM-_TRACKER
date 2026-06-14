@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Parent Portal</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            padding-bottom: 40px;
+        }
+
+        .dashboard-header {
+            background: linear-gradient(135deg, var(--primary-green, #155e4d) 0%, #104033 100%);
+            color: white;
+            border-bottom-left-radius: 24px;
+            border-bottom-right-radius: 24px;
+            padding: 30px 20px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .avatar-circle {
+            width: 55px;
+            height: 55px;
+            font-size: 1.5rem;
+            background: white;
+            color: var(--primary-green, #155e4d);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .stat-card {
+            border-radius: 16px;
+            border: none;
+            background: white;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+        }
+
+        .nav-pills-custom .nav-link {
+            color: #64748b;
+            font-weight: 600;
+            border-radius: 50px;
+            padding: 10px 24px;
+            transition: all 0.2s ease;
+        }
+
+        .nav-pills-custom .nav-link.active {
+            background-color: var(--primary-green, #155e4d);
+            color: white;
+            box-shadow: 0 4px 12px rgba(21, 94, 77, 0.2);
+        }
+
+        .progress-circle-lg {
+            width: 75px;
+            height: 75px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.15rem;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+            background: conic-gradient(#e2e8f0 100%, #e2e8f0 0);
+            border: 5px solid #f8fafc;
+        }
+
+        .prayer-badge {
+            font-size: 0.75rem;
+            padding: 6px 12px;
+            border-radius: 50px;
+            font-weight: 700;
+        }
+
+        .prayer-item {
+            background-color: #f8fafc;
+            border-radius: 12px;
+            border: 1px solid #edf2f7;
+            padding: 12px 16px;
+            margin-bottom: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 280px;
+            width: 100%;
+        }
+
+        .table-custom th {
+            font-weight: 600;
+            color: #64748b;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.5px;
+            padding: 12px 16px;
+        }
+
+        .table-custom td {
+            padding: 12px 16px;
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Header Section -->
+    <div class="dashboard-header mb-4">
+        <div class="container">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-circle" id="studentAvatar">?</div>
+                    <div>
+                        <h4 class="mb-0 fw-bold" id="studentName">Loading...</h4>
+                        <p class="mb-0 opacity-75 small fw-semibold" id="studentMeta">Class... | Admission: ...</p>
+                    </div>
+                </div>
+                <button id="logoutBtn" class="btn btn-sm btn-outline-light rounded-pill px-3 fw-bold">
+                    <i class="bi bi-box-arrow-right me-1"></i> Exit Portal
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Loading Spinner -->
+        <div id="loadingState" class="text-center py-5">
+            <div class="spinner-border text-success" role="status"></div>
+            <p class="mt-3 fw-bold text-muted">Retrieving student records...</p>
+        </div>
+
+        <!-- Dashboard Content -->
+        <div id="dashboardContent" class="d-none">
+
+            <!-- Tab Toggles -->
+            <div class="d-flex justify-content-center mb-4">
+                <ul class="nav nav-pills nav-pills-custom bg-white p-1 rounded-pill shadow-sm gap-1" id="dashboardTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="overview-tab" data-bs-toggle="pill" data-bs-target="#overview" type="button" role="tab">Overview</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="history-tab" data-bs-toggle="pill" data-bs-target="#history" type="button" role="tab">History</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="reports-tab" data-bs-toggle="pill" data-bs-target="#reports" type="button" role="tab">Reports</button>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Tab Panes -->
+            <div class="tab-content">
+
+                <!-- OVERVIEW TAB -->
+                <div class="tab-pane fade show active" id="overview" role="tabpanel">
+                    
+                    <!-- Stats Grid -->
+                    <div class="row g-3 mb-4">
+                        <div class="col-6 col-md-3">
+                            <div class="card stat-card p-3 text-center">
+                                <h6 class="text-muted small fw-bold mb-1 text-uppercase tracking-wider">Total Points</h6>
+                                <h3 class="fw-bold mb-0 text-success" id="statPoints">0</h3>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="card stat-card p-3 text-center">
+                                <h6 class="text-muted small fw-bold mb-1 text-uppercase tracking-wider">Salawat</h6>
+                                <h3 class="fw-bold mb-0 text-primary" id="statSalawat">0</h3>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="card stat-card p-3 text-center">
+                                <h6 class="text-muted small fw-bold mb-1 text-uppercase tracking-wider">Study Points</h6>
+                                <h3 class="fw-bold mb-0 text-warning" id="statSubjects">0</h3>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="card stat-card p-3 text-center">
+                                <h6 class="text-muted small fw-bold mb-1 text-uppercase tracking-wider">Days Tracked</h6>
+                                <h3 class="fw-bold mb-0 text-dark" id="statDays">0</h3>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Progress Circles -->
+                    <div class="card stat-card p-4 mb-4">
+                        <h6 class="fw-bold text-dark mb-3"><i class="bi bi-pie-chart text-success me-2"></i>Performance Progress (Latest Entry)</h6>
+                        <div class="d-flex justify-content-around align-items-center text-center">
+                            <div>
+                                <div class="progress-circle-lg mx-auto text-success" id="progTotal">0%</div>
+                                <p class="small text-muted fw-bold mt-2 mb-0">Total</p>
+                            </div>
+                            <div>
+                                <div class="progress-circle-lg mx-auto text-primary" id="progPrayers">0%</div>
+                                <p class="small text-muted fw-bold mt-2 mb-0">Prayers</p>
+                            </div>
+                            <div>
+                                <div class="progress-circle-lg mx-auto text-warning" id="progStudy">0%</div>
+                                <p class="small text-muted fw-bold mt-2 mb-0">Study</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Latest Tracker Entries -->
+                    <div class="card stat-card p-4">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="fw-bold text-dark mb-0"><i class="bi bi-calendar-check text-success me-2"></i>Latest Daily Log</h6>
+                            <span class="badge bg-light text-muted fw-bold shadow-sm" id="latestLogDate">No Date</span>
+                        </div>
+                        <div id="latestLogEntries">
+                            <!-- Populated dynamically -->
+                            <p class="text-muted text-center py-3">No logs found.</p>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- HISTORY TAB -->
+                <div class="tab-pane fade" id="history" role="tabpanel">
+                    <div class="card stat-card overflow-hidden">
+                        <div class="card-header bg-white py-3">
+                            <h6 class="fw-bold text-dark mb-0"><i class="bi bi-clock-history text-success me-2"></i>Complete Student History</h6>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-custom table-hover align-middle mb-0">
+                                <thead class="table-light text-muted">
+                                    <tr>
+                                        <th>Date</th>
+                                        <th class="text-center">Fajr</th>
+                                        <th class="text-center">Dhuhr</th>
+                                        <th class="text-center">Asr</th>
+                                        <th class="text-center">Maghrib</th>
+                                        <th class="text-center">Isha</th>
+                                        <th class="text-center">Study</th>
+                                        <th class="text-center">Salawat</th>
+                                        <th class="text-center">Points</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="historyTableBody">
+                                    <tr>
+                                        <td colspan="9" class="text-center py-4 text-muted">No records log.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- REPORTS TAB -->
+                <div class="tab-pane fade" id="reports" role="tabpanel">
+                    
+                    <!-- Chart Card -->
+                    <div class="card stat-card p-4 mb-4">
+                        <h6 class="fw-bold text-dark mb-3"><i class="bi bi-graph-up-arrow text-success me-2"></i>Points Trend (Last 30 Days)</h6>
+                        <div class="chart-container">
+                            <canvas id="parentTrendChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Prayer Breakdown -->
+                    <div class="card stat-card p-4">
+                        <h6 class="fw-bold text-dark mb-3"><i class="bi bi-bar-chart-steps text-success me-2"></i>Prayer Breakdown (Summary)</h6>
+                        <div class="row g-2 text-center" id="prayerBreakdownContainer">
+                            <!-- Populated dynamically -->
+                        </div>
+                        <div class="mt-4 d-flex justify-content-center gap-4" style="font-size: 0.8rem;">
+                            <div><span class="text-success fw-bold">■</span> Jamaat (2 pts)</div>
+                            <div><span class="text-warning fw-bold">■</span> Individual (1 pt)</div>
+                            <div><span class="text-danger fw-bold">■</span> Missed (0 pts)</div>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Bootstrap Bundle JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- App Logic script -->
+    <script type="module">
+        import { auth, db } from './js/firebase.js';
+        import { injectBottomNav } from './js/app.js';
+        import { signOut } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-auth.js';
+        import { collection, query, where, getDocs, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js';
+
+        let studentId = null;
+        let admissionNumber = null;
+        let madrasaId = null;
+        let allRecords = [];
+        let chartInstance = null;
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            studentId = sessionStorage.getItem('parentStudentId');
+            admissionNumber = sessionStorage.getItem('parentAdmissionNumber');
+            madrasaId = sessionStorage.getItem('activeMadrasaId');
+
+            if (!studentId || !admissionNumber || !madrasaId) {
+                alert("Session expired. Please enter Admission Number again.");
+                window.location.href = 'index.html';
+                return;
+            }
+
+            injectBottomNav('parent_dashboard');
+
+            document.getElementById('logoutBtn').addEventListener('click', async () => {
+                try {
+                    await signOut(auth);
+                } catch(e) { console.error(e); }
+                sessionStorage.clear();
+                window.location.href = 'index.html';
+            });
+
+            await loadParentDashboardData();
+        });
+
+        async function loadParentDashboardData() {
+            try {
+                // 1. Fetch Student profile
+                const studentDoc = await getDoc(doc(db, "students", studentId));
+                if (!studentDoc.exists()) {
+                    throw new Error("Student profile not found. Session expired.");
+                }
+                const studentData = studentDoc.data();
+                
+                // Fetch class name
+                let className = "Class";
+                if (studentData.classId) {
+                    const classDoc = await getDoc(doc(db, "classes", studentData.classId));
+                    if (classDoc.exists()) {
+                        className = classDoc.data().name || "Class";
+                    }
+                }
+
+                // Render Header
+                document.getElementById('studentName').innerText = studentData.name || "Unknown Student";
+                document.getElementById('studentAvatar').innerText = (studentData.name || "?").charAt(0).toUpperCase();
+                document.getElementById('studentMeta').innerText = `Class: ${className} | Admission: ${admissionNumber}`;
+
+                // 2. Fetch all student records
+                const qRecords = query(
+                    collection(db, "records"),
+                    where("madrasaId", "==", madrasaId),
+                    where("studentId", "==", studentId)
+                );
+                const snap = await getDocs(qRecords);
+                
+                allRecords = [];
+                snap.forEach(d => {
+                    allRecords.push(d.data());
+                });
+
+                // Sort by date descending for overview & history
+                allRecords.sort((a, b) => b.date.localeCompare(a.date));
+
+                // 3. Render Overview stats
+                renderStats();
+
+                // 4. Render History list
+                renderHistoryTable();
+
+                // 5. Render Chart & Breakdown (Reports)
+                renderReports();
+
+                // Hide loading & show content
+                document.getElementById('loadingState').classList.add('d-none');
+                document.getElementById('dashboardContent').classList.remove('d-none');
+
+            } catch(err) {
+                console.error("Dashboard load failed", err);
+                document.getElementById('loadingState').innerHTML = `
+                    <div class="alert alert-danger mx-3">
+                        Failed to retrieve dashboard records. ${err.message}
+                    </div>
+                `;
+            }
+        }
+
+        function renderStats() {
+            let pts = 0, salawat = 0, subPts = 0;
+            allRecords.forEach(r => {
+                pts += Number(r.totalScore) || 0;
+                salawat += Number(r.salawatCount) || 0;
+                subPts += Number(r.subjectScore) || 0;
+            });
+
+            document.getElementById('statPoints').innerText = pts;
+            document.getElementById('statSalawat').innerText = salawat;
+            document.getElementById('statSubjects').innerText = subPts;
+            document.getElementById('statDays').innerText = allRecords.length;
+
+            if (allRecords.length > 0) {
+                const latest = allRecords[0];
+                document.getElementById('latestLogDate').innerText = latest.date;
+
+                // Render Progress circles
+                // Prayers: completed count / 5 * 100
+                const prayers = latest.prayers || {};
+                const completedPrayers = Object.values(prayers).filter(val => val === 'Jamaat' || val === 'Individual').length;
+                const pPct = Math.round((completedPrayers / 5) * 100);
+
+                // Study progress: we need to find total class subjects.
+                // We'll read it based on subjectScore or default.
+                // Let's assume standard targets: study progress is scaled by subjectScore.
+                const sPct = latest.subjectScore > 0 ? 100 : 0; // simple binary completed check if no subject total is saved in record
+
+                // Total progress = (completed prayers + subjectScore) / (5 + total subjects in record)
+                // For parent read, if we don't have total subjects, let's fetch from latest.subjects array length.
+                const subjectsArr = latest.subjects || [];
+                const totalSubjects = subjectsArr.length || 1; // fallback
+                const tPct = Math.round(((completedPrayers + latest.subjectScore) / (5 + totalSubjects)) * 100);
+
+                updateProgressElement('progTotal', tPct, '#10b981');
+                updateProgressElement('progPrayers', pPct, '#3b82f6');
+                updateProgressElement('progStudy', sPct, '#f59e0b');
+
+                // Render latest tracker details list
+                const emojiMap = { fajr: "🌅 Fajr", dhuhr: "☀️ Dhuhr", asr: "🌤 Asr", maghrib: "🌇 Maghrib", isha: "🌙 Isha" };
+                const order = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+
+                let itemsHtml = "";
+                order.forEach(p => {
+                    const status = prayers[p] || 'Not Prayed';
+                    let badgeClass = "bg-danger text-white";
+                    if (status === 'Jamaat') badgeClass = "bg-success text-white";
+                    else if (status === 'Individual') badgeClass = "bg-warning text-dark";
+
+                    itemsHtml += `
+                        <div class="d-flex justify-content-between align-items-center prayer-item">
+                            <span class="fw-bold text-dark">${emojiMap[p]}</span>
+                            <span class="badge rounded-pill prayer-badge ${badgeClass}">${status}</span>
+                        </div>
+                    `;
+                });
+
+                // Add study summary line
+                itemsHtml += `
+                    <div class="d-flex justify-content-between align-items-center prayer-item mt-3 border-top pt-3 bg-white">
+                        <div>
+                            <span class="fw-bold text-dark d-block">📚 Subjects Completed</span>
+                            <small class="text-muted fw-bold">Score: ${latest.subjectScore}</small>
+                        </div>
+                        <span class="badge bg-light text-success border shadow-sm fw-bold rounded-pill px-3 py-2">${latest.subjects?.length || 0} Studied</span>
+                    </div>
+                `;
+
+                document.getElementById('latestLogEntries').innerHTML = itemsHtml;
+
+            } else {
+                document.getElementById('latestLogDate').innerText = "No Logs Yet";
+                document.getElementById('latestLogEntries').innerHTML = `
+                    <p class="text-muted text-center py-4">No daily logs registered for this student yet.</p>
+                `;
+            }
+        }
+
+        function updateProgressElement(id, pct, color) {
+            const el = document.getElementById(id);
+            if (el) {
+                el.style.background = `conic-gradient(${color} ${pct}%, #e2e8f0 0)`;
+                el.innerText = `${pct}%`;
+            }
+        }
+
+        function renderHistoryTable() {
+            const tbody = document.getElementById('historyTableBody');
+            if (allRecords.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="9" class="text-center py-4 text-muted">No records found.</td></tr>`;
+                return;
+            }
+
+            let rows = "";
+            allRecords.forEach(r => {
+                const prayers = r.prayers || {};
+                const order = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+
+                const cells = order.map(p => {
+                    const status = prayers[p];
+                    if (!status || status === 'Not Prayed') return '<td class="text-center text-danger">&times;</td>';
+                    if (status === 'Jamaat') return '<td class="text-center text-success fw-bold">&#10003;</td>';
+                    return '<td class="text-center text-warning fw-bold">&#10003;</td>';
+                }).join('');
+
+                rows += `
+                    <tr class="border-bottom border-light">
+                        <td class="fw-bold text-dark">${r.date}</td>
+                        ${cells}
+                        <td class="text-center fw-bold text-success">${r.subjectScore || 0}</td>
+                        <td class="text-center text-info small fw-bold">${r.salawatCount || 0}</td>
+                        <td class="text-center"><span class="badge bg-success bg-opacity-10 text-success fw-bold px-2 py-1 rounded-pill">${r.totalScore || 0}</span></td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = rows;
+        }
+
+        function renderReports() {
+            if (allRecords.length === 0) return;
+
+            // Generate breakdown
+            const pKeys = ["fajr", "dhuhr", "asr", "maghrib", "isha"];
+            const pNames = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"];
+            const pIcons = ["🌅", "☀️", "🌤", "🌇", "🌙"];
+
+            let breakdownHtml = "";
+            pKeys.forEach((key, idx) => {
+                let jam = 0, ind = 0, miss = 0;
+                allRecords.forEach(r => {
+                    const status = r.prayers?.[key];
+                    if (status === 'Jamaat') jam++;
+                    else if (status === 'Individual') ind++;
+                    else miss++;
+                });
+
+                breakdownHtml += `
+                    <div class="col-12 col-sm-2.4 flex-fill mb-2">
+                        <div class="p-3 bg-light rounded-4 border border-white text-center">
+                            <div class="fs-4 mb-1">${pIcons[idx]}</div>
+                            <h6 class="fw-bold small mb-2">${pNames[idx]}</h6>
+                            <div class="d-flex flex-column gap-1 text-center" style="font-size: 0.75rem;">
+                                <span class="text-success fw-bold">${jam} Jam</span>
+                                <span class="text-warning fw-bold text-dark">${ind} Ind</span>
+                                <span class="text-danger fw-bold">${miss} Mis</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            document.getElementById('prayerBreakdownContainer').innerHTML = breakdownHtml;
+
+            // Generate Chart trend last 30 days
+            const chartData = [...allRecords].reverse().slice(-30);
+            const labels = chartData.map(r => {
+                const parts = r.date.split('-');
+                return `${parts[1]}/${parts[2]}`; // MM/DD
+            });
+            const scores = chartData.map(r => Number(r.totalScore) || 0);
+
+            const ctx = document.getElementById('parentTrendChart').getContext('2d');
+            if (chartInstance) {
+                chartInstance.destroy();
+            }
+
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Points Earned',
+                        data: scores,
+                        borderColor: '#198754',
+                        backgroundColor: 'rgba(25, 135, 84, 0.08)',
+                        borderWidth: 3,
+                        tension: 0.35,
+                        fill: true,
+                        pointBackgroundColor: '#198754',
+                        pointRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { precision: 0 }
+                        },
+                        x: {
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+
+</html>

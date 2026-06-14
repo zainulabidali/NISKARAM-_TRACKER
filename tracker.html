@@ -196,39 +196,25 @@
 
     <!-- Step 1: Student Selection Fullscreen Modal -->
     <div class="modal fade" id="studentSelectionModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
-        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-0 shadow-lg rounded-4">
-                <div class="modal-header border-0 bg-light rounded-top-4 pb-0">
-                    <h5 class="modal-title fw-bold text-primary"><i class="bi bi-person-lines-fill me-2"></i>Select
-                        Student</h5>
+                <div class="modal-header border-0 bg-light rounded-top-4 pb-0 text-center d-block">
+                    <h5 class="modal-title fw-bold text-primary mb-1"><i class="bi bi-shield-lock-fill me-2"></i>Student Prayer Tracker</h5>
+                    <p class="text-muted small mb-0">Enter your Admission Number to log daily prayers</p>
                 </div>
                 <div class="modal-body p-4 bg-light">
                     <!-- Hidden input to store selected student -->
                     <input type="hidden" id="studentSelect" value="">
+                    
                     <div class="mb-3">
-                        <label class="form-label text-muted small fw-bold">1. Select Class</label>
-                        <select id="classSelectModal"
-                            class="form-select form-select-lg bg-white border-0 shadow-sm rounded-4">
-                            <option value="">Select Class...</option>
-                        </select>
+                        <label class="form-label text-muted small fw-bold">Admission Number</label>
+                        <input type="text" id="parentAdmissionInput" class="form-control form-control-lg bg-white border-0 shadow-sm rounded-3 fw-bold" placeholder="e.g. A001" required autocomplete="off">
                     </div>
-
-                    <div>
-                        <label class="form-label text-muted small fw-bold">2. Select Student <span
-                                id="studentCountBadgeModal"
-                                class="badge bg-secondary rounded-pill ms-2">0</span></label>
-                        <div id="studentCardsContainerModal" class="d-flex flex-column gap-2 mt-2">
-                            <div
-                                class="text-muted small p-4 text-center bg-white shadow-sm rounded-4 border border-light">
-                                Please select a class first.</div>
-                        </div>
-                    </div>
+                    <div id="modalErrorMsg" class="alert alert-danger d-none py-2 fs-6 rounded-3 text-center"></div>
                 </div>
                 <div class="modal-footer border-0 bg-light rounded-bottom-4 pt-0">
-                    <button type="button" class="btn btn-primary w-100 rounded-pill fw-bold py-2 shadow-sm d-none"
-                        id="btnContinueTracker">Continue to Tracker <i class="bi bi-arrow-right ms-1"></i></button>
-                    <a href="home.html" class="btn btn-light w-100 rounded-pill fw-bold text-muted mt-2 border">Back to
-                        Home</a>
+                    <button type="button" class="btn btn-primary w-100 rounded-pill fw-bold py-2 shadow-sm" id="btnVerifyAdmission">View Record <i class="bi bi-arrow-right ms-1"></i></button>
+                    <a href="login.html" class="btn btn-light w-100 rounded-pill fw-bold text-muted mt-2 border">Usthad Login</a>
                 </div>
             </div>
         </div>
