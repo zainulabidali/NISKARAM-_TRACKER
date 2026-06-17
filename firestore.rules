@@ -24,12 +24,7 @@ service cloud.firestore {
        return isSuperAdmin() || isSameMadrasa(madrasaId);
     }
 
-    // PARENT SESSION VERIFICATION
-    function isParentOfStudent(studentId) {
-      return isLoggedIn() &&
-        exists(/databases/$(database)/documents/parent_sessions/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/parent_sessions/$(request.auth.uid)).data.studentId == studentId;
-    }
+
 
     // ─── COLLECTION RULES ───────────────────────────────────────────────────
 
@@ -54,10 +49,7 @@ service cloud.firestore {
       allow create, update, delete: if isSuperAdmin();
     }
 
-    // PARENT SESSIONS
-    match /parent_sessions/{userId} {
-      allow read, write: if isLoggedIn() && request.auth.uid == userId;
-    }
+
 
     // ADMISSION NUMBERS
     match /admission_numbers/{admissionNumber} {
@@ -78,7 +70,6 @@ service cloud.firestore {
     // STUDENTS
     match /students/{studentId} {
       allow read: if isAuthorizedForMadrasa(resource.data.madrasaId)
-                    || isParentOfStudent(studentId)
                     || (isLoggedIn() == false && resource.data.madrasaId != null);
       allow create: if isAuthorizedForMadrasa(request.resource.data.madrasaId);
       allow update, delete: if isAuthorizedForMadrasa(resource.data.madrasaId);
@@ -101,7 +92,6 @@ service cloud.firestore {
     // RECORDS (PRAYER TRACKING)
     match /records/{recordId} {
       allow read: if isAuthorizedForMadrasa(resource.data.madrasaId)
-                    || isParentOfStudent(resource.data.studentId)
                     || (isLoggedIn() == false && resource.data.madrasaId != null);
       allow create: if true;
       allow update: if true;

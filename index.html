@@ -137,20 +137,14 @@
     </div>
 
     <script type="module">
-        import { auth, db } from './js/firebase.js';
-        import { signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-auth.js';
-        import { doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js';
+        import { db } from './js/firebase.js';
+        import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js';
 
-        // Check if already authenticated (either as admin or parent)
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                // If it's a parent session
-                const parentStudentId = sessionStorage.getItem('parentStudentId');
-                if (parentStudentId) {
-                    window.location.href = 'parent_dashboard.html';
-                }
-            }
-        });
+        // Check if already authenticated (parent session active)
+        const parentStudentId = sessionStorage.getItem('parentStudentId');
+        if (parentStudentId) {
+            window.location.href = 'parent_dashboard.html';
+        }
 
         document.getElementById('portalForm').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -163,6 +157,14 @@
             errorMsg.classList.add('d-none');
 
             try {
+                // Get institute ID from URL
+                const urlParams = new URLSearchParams(window.location.search);
+                const urlInstituteId = urlParams.get('m') || urlParams.get('instituteId') || localStorage.getItem('activeMadrasaId');
+
+                if (!urlInstituteId) {
+                    throw new Error("Access denied. Please use the link shared by your Ustad/Madrasa.");
+                }
+
                 // Step 1: Validate admission number via lookup doc
                 const lookupSnap = await getDoc(doc(db, "admission_numbers", admissionNumber));
                 if (!lookupSnap.exists()) {
@@ -171,26 +173,17 @@
 
                 const data = lookupSnap.data();
 
-                // Step 2: Sign in anonymously if not logged in
-                let user = auth.currentUser;
-                if (!user) {
-                    const userCredential = await signInAnonymously(auth);
-                    user = userCredential.user;
+                // Validate if student belongs to the shared institute
+                if (data.madrasaId !== urlInstituteId) {
+                    throw new Error("Admission Number does not belong to this Madrasa.");
                 }
 
-                // Step 3: Write to parent_sessions
-                await setDoc(doc(db, "parent_sessions", user.uid), {
-                    studentId: data.studentId,
-                    admissionNumber: admissionNumber,
-                    createdAt: new Date().toISOString()
-                });
-
-                // Step 4: Save session context
+                // Step 2: Save session context
                 sessionStorage.setItem('parentStudentId', data.studentId);
                 sessionStorage.setItem('parentAdmissionNumber', admissionNumber);
                 sessionStorage.setItem('activeMadrasaId', data.madrasaId);
 
-                // Step 5: Route to parent dashboard
+                // Step 3: Route to parent dashboard
                 window.location.href = 'parent_dashboard.html';
 
             } catch (error) {

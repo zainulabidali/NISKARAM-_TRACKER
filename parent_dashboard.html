@@ -301,9 +301,8 @@
 
     <!-- App Logic script -->
     <script type="module">
-        import { auth, db } from './js/firebase.js';
+        import { db } from './js/firebase.js';
         import { injectBottomNav } from './js/app.js';
-        import { signOut } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-auth.js';
         import { collection, query, where, getDocs, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js';
 
         let studentId = null;
@@ -325,12 +324,10 @@
 
             injectBottomNav('parent_dashboard');
 
-            document.getElementById('logoutBtn').addEventListener('click', async () => {
-                try {
-                    await signOut(auth);
-                } catch(e) { console.error(e); }
+            document.getElementById('logoutBtn').addEventListener('click', () => {
+                const activeMadrasaId = sessionStorage.getItem('activeMadrasaId');
                 sessionStorage.clear();
-                window.location.href = 'index.html';
+                window.location.href = 'index.html' + (activeMadrasaId ? '?m=' + activeMadrasaId : '');
             });
 
             await loadParentDashboardData();

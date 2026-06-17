@@ -1,7 +1,6 @@
-import { db, auth } from './firebase.js';
+import { db } from './firebase.js';
 import { injectBottomNav } from './app.js';
 import { collection, query, where, getDocs, setDoc, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js';
-import { onAuthStateChanged, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-auth.js';
 
 // Removed onAuthStateChanged to allow shared link bypass
 
@@ -113,6 +112,14 @@ function setupSelectionModal() {
             errorMsg.classList.add('d-none');
 
             try {
+                // Get institute ID from URL or active context
+                const urlParams = new URLSearchParams(window.location.search);
+                const urlInstituteId = urlParams.get('m') || urlParams.get('instituteId') || localStorage.getItem('activeMadrasaId');
+
+                if (!urlInstituteId) {
+                    throw new Error("Access denied. Please open the link shared by your Ustad/Madrasa.");
+                }
+
                 // 1. Validate Admission Number
                 const lookupSnap = await getDoc(doc(db, "admission_numbers", inputVal));
                 if (!lookupSnap.exists()) {
@@ -121,19 +128,10 @@ function setupSelectionModal() {
 
                 const data = lookupSnap.data();
 
-                // 2. Sign in anonymously if not logged in
-                let user = auth.currentUser;
-                if (!user) {
-                    const userCredential = await signInAnonymously(auth);
-                    user = userCredential.user;
+                // Validate if student belongs to the shared institute
+                if (data.madrasaId !== urlInstituteId) {
+                    throw new Error("Admission Number does not belong to this Madrasa.");
                 }
-
-                // 3. Write to parent_sessions
-                await setDoc(doc(db, "parent_sessions", user.uid), {
-                    studentId: data.studentId,
-                    admissionNumber: inputVal,
-                    createdAt: new Date().toISOString()
-                });
 
                 // 4. Save session context
                 sessionStorage.setItem('parentStudentId', data.studentId);
