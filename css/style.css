@@ -10,24 +10,31 @@ body {
   background-color: var(--bg-color);
   font-family: 'Inter', 'Roboto', sans-serif;
   color: var(--text-dark);
-  padding-bottom: 90px; /* Space for new floating bottom nav */
+  padding-bottom: 90px;
+  /* Space for new floating bottom nav */
 }
 
 /* Islamic Theme Card Styles */
 .card {
   border: none;
   border-radius: 12px;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
   transition: transform 0.2s;
   background-color: white;
 }
+
 .card:active {
   transform: scale(0.98);
 }
 
 /* Colors and Buttons */
-.text-primary { color: var(--primary-green) !important; }
-.bg-primary { background-color: var(--primary-green) !important; }
+.text-primary {
+  color: var(--primary-green) !important;
+}
+
+.bg-primary {
+  background-color: var(--primary-green) !important;
+}
 
 .btn-primary {
   background-color: var(--primary-green);
@@ -36,13 +43,22 @@ body {
   padding: 10px 16px;
   font-weight: 500;
 }
-.btn-primary:hover, .btn-primary:active, .btn-primary:focus {
+
+.btn-primary:hover,
+.btn-primary:active,
+.btn-primary:focus {
   background-color: #176451;
   border-color: #176451;
 }
 
-.text-accent { color: var(--accent-gold) !important; }
-.bg-accent { background-color: var(--accent-gold) !important; }
+.text-accent {
+  color: var(--accent-gold) !important;
+}
+
+.bg-accent {
+  background-color: var(--accent-gold) !important;
+}
+
 .btn-accent {
   background-color: var(--accent-gold);
   border-color: var(--accent-gold);
@@ -50,7 +66,10 @@ body {
   border-radius: 8px;
   font-weight: 500;
 }
-.btn-accent:hover, .btn-accent:active, .btn-accent:focus {
+
+.btn-accent:hover,
+.btn-accent:active,
+.btn-accent:focus {
   background-color: #b59223;
   border-color: #b59223;
   color: #fff;
@@ -79,16 +98,25 @@ body {
   top: 8px;
   bottom: 8px;
   width: calc((100% - 16px) / 3);
-  background: rgba(31, 122, 99, 0.15); /* primary-green with opacity */
+  background: rgba(31, 122, 99, 0.15);
+  /* primary-green with opacity */
   border-radius: 40px;
   z-index: 0;
   transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
   left: 8px;
 }
 
-.nav-indicator-0 { transform: translateX(0); }
-.nav-indicator-1 { transform: translateX(100%); }
-.nav-indicator-2 { transform: translateX(200%); }
+.nav-indicator-0 {
+  transform: translateX(0);
+}
+
+.nav-indicator-1 {
+  transform: translateX(100%);
+}
+
+.nav-indicator-2 {
+  transform: translateX(200%);
+}
 
 .nav-item {
   flex: 1;
@@ -104,17 +132,21 @@ body {
   position: relative;
   padding: 8px 0;
 }
+
 .nav-item i {
   font-size: 22px;
   margin-bottom: 2px;
   transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
+
 .nav-item.active {
   color: var(--primary-green);
 }
+
 .nav-item.active i {
   transform: scale(1.2) translateY(-2px);
 }
+
 .nav-item:hover {
   color: var(--primary-green);
   text-decoration: none;
@@ -136,6 +168,7 @@ body {
   top: 0;
   z-index: 100;
 }
+
 .app-header h1 {
   font-size: 20px;
   margin: 0;
@@ -144,6 +177,7 @@ body {
   align-items: center;
   gap: 8px;
 }
+
 .app-header-subtitle {
   font-size: 14px;
   opacity: 0.8;
@@ -151,12 +185,15 @@ body {
 }
 
 /* Forms and Inputs */
-.form-control, .form-select {
+.form-control,
+.form-select {
   border-radius: 8px;
   border: 1px solid #ddd;
   padding: 10px 15px;
 }
-.form-control:focus, .form-select:focus {
+
+.form-control:focus,
+.form-select:focus {
   border-color: var(--primary-green);
   box-shadow: 0 0 0 0.2rem rgba(31, 122, 99, 0.25);
 }
@@ -171,9 +208,19 @@ body {
 }
 
 /* Utilities */
-.shadow-sm { box-shadow: 0 2px 8px rgba(0,0,0,0.05) !important; }
-.rounded-4 { border-radius: 16px !important; }
-.mt-100 { margin-top: 100px; } /* for full page vertical centering */
+.shadow-sm {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05) !important;
+}
+
+.rounded-4 {
+  border-radius: 16px !important;
+}
+
+.mt-100 {
+  margin-top: 100px;
+}
+
+/* for full page vertical centering */
 
 .profile-hover-card {
   transition: all 0.3s ease;
@@ -181,7 +228,7 @@ body {
 
 .profile-hover-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 10px 25px rgba(0,0,0,.08) !important;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, .08) !important;
 }
 
 .progress-circle {

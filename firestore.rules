@@ -54,7 +54,7 @@ service cloud.firestore {
     // ADMISSION NUMBERS
     match /admission_numbers/{admissionNumber} {
       allow get: if true;
-      allow list: if false;
+      allow list: if isAuthorizedForMadrasa(resource.data.madrasaId);
       allow create, update, delete: if isSuperAdmin() || 
         (request.resource != null && isAuthorizedForMadrasa(request.resource.data.madrasaId)) ||
         (resource != null && isAuthorizedForMadrasa(resource.data.madrasaId));
@@ -98,6 +98,12 @@ service cloud.firestore {
       
       // Only Admins can delete records
       allow delete: if isAuthorizedForMadrasa(resource.data.madrasaId);
+    }
+
+    // ANNOUNCEMENTS
+    match /announcements/{announcementId} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
     }
   }
 }
