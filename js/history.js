@@ -312,13 +312,16 @@ function renderRecords() {
 
         const prayerIndicators = orderedPrayers.map((p) => {
             const status = rawPrayers[p];
-            if (!status || status === 'Not Prayed') {
-                return '<td class="text-center py-2"><span class="text-danger">&times;</span></td>';
-            }
             if (status === 'Jamaat') {
                 return '<td class="text-center py-2"><span class="text-success fw-bold">&#10003;</span></td>';
             }
-            return '<td class="text-center py-2"><span class="text-warning fw-bold">&#10003;</span></td>';
+            if (status === 'Individual') {
+                return '<td class="text-center py-2"><span class="text-warning fw-bold">&#10003;</span></td>';
+            }
+            if (status === 'Qaza') {
+                return '<td class="text-center py-2"><span class="text-info fw-bold">Q</span></td>';
+            }
+            return '<td class="text-center py-2"><span class="text-danger">&times;</span></td>';
         }).join('');
 
         const salawatCount = r.salawatCount || 0;

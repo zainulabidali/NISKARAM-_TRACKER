@@ -11,6 +11,12 @@ let activeStudentClassName = null;
 let editModal;
 let recordEditModal;
 
+// Leaderboard & Charts global states
+let leaderboardClassId = null;
+let leaderboardPeriod = 'weekly';
+let chartDistributionInstance = null;
+let chartPerformersInstance = null;
+
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         // Super Admin Impersonation logic
@@ -160,6 +166,15 @@ window.openAdminModule = (moduleId) => {
         document.getElementById('studentClassDetailView').classList.add('d-none');
         document.getElementById('studentClassFoldersView').classList.remove('d-none');
         loadStudentClassFolders();
+    }
+
+    if (moduleId === 'leaderboard') {
+        initLeaderboard();
+    }
+
+    if (moduleId === 'dbhealth') {
+        document.getElementById('orphanScanResult').innerHTML = '';
+        document.getElementById('recalcScanResult').innerHTML = '';
     }
 };
 
@@ -451,22 +466,67 @@ function attachCrudEvents() {
     // Setup Delete
     document.querySelectorAll('.del-btn').forEach(b => {
         b.onclick = async () => {
-            if (confirm(`Delete this ${b.dataset.type.slice(0, -1)}?`)) {
-                if (b.dataset.type === 'students') {
-                    const studentData = studentMap[b.dataset.id];
-                    if (studentData && studentData.admission_number) {
+            const typeName = b.dataset.type.slice(0, -1);
+            const result = await Swal.fire({
+                title: 'Are you sure?',
+                text: `Do you want to delete this ${typeName}? This action cannot be undone!`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Yes, delete it!',
+                customClass: { popup: 'rounded-4' }
+            });
+
+            if (result.isConfirmed) {
+                try {
+                    if (b.dataset.type === 'students') {
+                        const studentId = b.dataset.id;
+                        const studentData = studentMap[studentId];
+                        if (studentData && studentData.admission_number) {
+                            try {
+                                await deleteDoc(doc(db, "admission_numbers", studentData.admission_number));
+                            } catch (e) { console.error("Error deleting lookup doc:", e); }
+                        }
+                        
+                        // Cascade delete related records
                         try {
-                            await deleteDoc(doc(db, "admission_numbers", studentData.admission_number));
-                        } catch (e) { console.error("Error deleting lookup doc:", e); }
+                            const recQ = query(collection(db, "records"), where("studentId", "==", studentId));
+                            const recSnap = await getDocs(recQ);
+                            if (!recSnap.empty) {
+                                const batch = writeBatch(db);
+                                recSnap.forEach(dDoc => batch.delete(dDoc.ref));
+                                await batch.commit();
+                                console.log(`Cascade deleted ${recSnap.size} records for student ${studentId}`);
+                            }
+                        } catch(e) {
+                            console.error("Error cascade deleting records:", e);
+                        }
                     }
+                    await deleteDoc(doc(db, b.dataset.type, b.dataset.id));
+                    Swal.fire({
+                        title: 'Deleted!',
+                        text: `The ${typeName} has been successfully deleted.`,
+                        icon: 'success',
+                        timer: 2000,
+                        showConfirmButton: false,
+                        customClass: { popup: 'rounded-4' }
+                    });
+                    // Reload correct panel
+                    if (b.dataset.type === 'classes') loadClasses();
+                    if (b.dataset.type === 'subjects') loadSubjects();
+                    if (b.dataset.type === 'books') loadBooks();
+                    if (b.dataset.type === 'students') loadStudents(); // reloads current class
+                    if (b.dataset.type === 'records') loadAdminRecords();
+                } catch (error) {
+                    Swal.fire({
+                        title: 'Error',
+                        text: `Failed to delete: ${error.message}`,
+                        icon: 'error',
+                        confirmButtonColor: '#d33',
+                        customClass: { popup: 'rounded-4' }
+                    });
                 }
-                await deleteDoc(doc(db, b.dataset.type, b.dataset.id));
-                // Reload correct panel
-                if (b.dataset.type === 'classes') loadClasses();
-                if (b.dataset.type === 'subjects') loadSubjects();
-                if (b.dataset.type === 'books') loadBooks();
-                if (b.dataset.type === 'students') loadStudents(); // reloads current class
-                if (b.dataset.type === 'records') loadAdminRecords();
             }
         };
     });
@@ -917,7 +977,7 @@ function getFilteredRecords() {
             const keys = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
             const completedCount = keys.filter(k => {
                 const val = r[k] || r.prayers?.[k];
-                return val === 'Jamaat' || val === 'Individual';
+                return val === 'Jamaat' || val === 'Individual' || val === 'Qaza';
             }).length;
             
             if (recordsState.prayerStatus === 'completed') {
@@ -951,8 +1011,8 @@ function getSortedRecords(records) {
             return admA.localeCompare(admB) * dir;
         } else if (key === 'completion') {
             const keys = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
-            const compA = keys.filter(k => { const val = a[k] || a.prayers?.[k]; return val === 'Jamaat' || val === 'Individual'; }).length;
-            const compB = keys.filter(k => { const val = b[k] || b.prayers?.[k]; return val === 'Jamaat' || val === 'Individual'; }).length;
+            const compA = keys.filter(k => { const val = a[k] || a.prayers?.[k]; return val === 'Jamaat' || val === 'Individual' || val === 'Qaza'; }).length;
+            const compB = keys.filter(k => { const val = b[k] || b.prayers?.[k]; return val === 'Jamaat' || val === 'Individual' || val === 'Qaza'; }).length;
             return (compA - compB) * dir;
         }
         return 0;
@@ -970,7 +1030,7 @@ function calculateClassMetrics(filteredStudents, filteredRecords, dateFilteredRe
         const keys = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
         keys.forEach(k => {
             const val = r[k] || r.prayers?.[k];
-            if (val === 'Jamaat' || val === 'Individual') {
+            if (val === 'Jamaat' || val === 'Individual' || val === 'Qaza') {
                 totalCompleted++;
             } else {
                 totalMissed++;
@@ -1041,13 +1101,14 @@ function renderDashboardTable(records) {
         const keys = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
         const completedCount = keys.filter(k => {
             const val = r[k] || r.prayers?.[k];
-            return val === 'Jamaat' || val === 'Individual';
+            return val === 'Jamaat' || val === 'Individual' || val === 'Qaza';
         }).length;
         const completionPct = Math.round((completedCount / 5) * 100);
         
         const getStatusBadge = (val) => {
             if (val === 'Jamaat') return `<span class="badge bg-success bg-opacity-10 text-success fw-bold py-1 px-2 rounded-pill" style="font-size: 0.75rem;"><i class="bi bi-people-fill me-1"></i>Jam</span>`;
             if (val === 'Individual') return `<span class="badge bg-warning bg-opacity-10 text-warning fw-bold py-1 px-2 rounded-pill" style="font-size: 0.75rem;"><i class="bi bi-person-fill me-1"></i>Ind</span>`;
+            if (val === 'Qaza') return `<span class="badge bg-info bg-opacity-10 text-info fw-bold py-1 px-2 rounded-pill" style="font-size: 0.75rem;"><i class="bi bi-clock-history me-1"></i>Qaz</span>`;
             if (val === 'Incorrect') return `<span class="badge bg-secondary bg-opacity-10 text-secondary fw-bold py-1 px-2 rounded-pill" style="font-size: 0.75rem;"><i class="bi bi-exclamation-triangle me-1"></i>Inc</span>`;
             if (val === 'Not Prayed') return `<span class="badge bg-danger bg-opacity-10 text-danger fw-bold py-1 px-2 rounded-pill" style="font-size: 0.75rem;"><i class="bi bi-x-circle me-1"></i>Mis</span>`;
             return `<span class="text-muted">—</span>`;
@@ -1120,7 +1181,18 @@ function renderTablePagination(totalPages) {
 }
 
 async function deleteClassRecord(recordId) {
-    if (confirm("Are you sure you want to permanently delete this prayer record?")) {
+    const result = await Swal.fire({
+        title: 'Are you sure?',
+        text: "Are you sure you want to permanently delete this prayer record?",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Yes, delete it!',
+        customClass: { popup: 'rounded-4' }
+    });
+
+    if (result.isConfirmed) {
         try {
             await deleteDoc(doc(db, "records", recordId));
             
@@ -1133,8 +1205,23 @@ async function deleteClassRecord(recordId) {
             });
             
             refreshClassRecordsUI();
+            
+            Swal.fire({
+                title: 'Deleted!',
+                text: 'The prayer record has been deleted.',
+                icon: 'success',
+                timer: 2000,
+                showConfirmButton: false,
+                customClass: { popup: 'rounded-4' }
+            });
         } catch(e) {
-            alert("Error deleting record: " + e.message);
+            Swal.fire({
+                title: 'Error',
+                text: "Error deleting record: " + e.message,
+                icon: 'error',
+                confirmButtonColor: '#d33',
+                customClass: { popup: 'rounded-4' }
+            });
         }
     }
 }
@@ -1174,9 +1261,10 @@ async function openEditRecordModalFromTable(rId, stuId) {
               <div class="mb-3 p-2 bg-light rounded-3 shadow-sm border border-white">
                  <label class="fw-bold small mb-2 text-dark">${pCap}</label>
                  <select class="form-select form-select-sm border-0 shadow-sm prayer-edit-select fw-bold text-secondary" data-key="${p}" data-cap="${pCap}">
-                    <option value="Jamaat" ${currentVal === 'Jamaat' ? 'selected' : ''}>Jamaat (2pts)</option>
-                    <option value="Individual" ${currentVal === 'Individual' ? 'selected' : ''}>Individual (1pt)</option>
-                    <option value="Not Prayed" ${currentVal === 'Not Prayed' ? 'selected' : ''}>Not Prayed (0pts)</option>
+                    <option value="Jamaat" ${currentVal === 'Jamaat' ? 'selected' : ''}>Jamaat (1.0 pt)</option>
+                    <option value="Individual" ${currentVal === 'Individual' ? 'selected' : ''}>Individual (0.5 pt)</option>
+                    <option value="Qaza" ${currentVal === 'Qaza' ? 'selected' : ''}>Qaza (0.5 pt)</option>
+                    <option value="Not Prayed" ${currentVal === 'Not Prayed' ? 'selected' : ''}>Not Prayed (0 pts)</option>
                  </select>
               </div>
             `;
@@ -1322,7 +1410,7 @@ function initRecordsRedesignListeners() {
         
         const prayers = {};
         let prayerScore = 0;
-        const PRAYER_SCORES = { "Jamaat": 2, "Individual": 1, "Incorrect": 0, "Not Prayed": 0 };
+        const PRAYER_SCORES = { "Jamaat": 2.0, "Individual": 1.0, "Qaza": 0.5, "Incorrect": 0.0, "Not Prayed": 0.0 };
         
         const selects = document.querySelectorAll('.prayer-edit-select');
         selects.forEach(s => {
@@ -1331,8 +1419,9 @@ function initRecordsRedesignListeners() {
             prayers[key] = val;
             prayerScore += PRAYER_SCORES[val] || 0;
         });
+        prayerScore = parseFloat(prayerScore.toFixed(1));
         
-        const totalScore = prayerScore + subjectScore;
+        const totalScore = parseFloat((prayerScore + subjectScore).toFixed(1));
         
         const btn = document.getElementById('saveRecordEditBtn');
         btn.disabled = true;
@@ -1412,6 +1501,23 @@ function initRecordsRedesignListeners() {
     
     // Set initial dynamic fields for period selector
     updateReportPeriodInputs();
+
+    // Leaderboard Listeners
+    document.getElementById('leaderboardClassSelect')?.addEventListener('change', (e) => {
+        leaderboardClassId = e.target.value;
+        fetchAndRenderLeaderboard();
+    });
+
+    document.querySelectorAll('input[name="leaderboardPeriod"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            leaderboardPeriod = e.target.value;
+            fetchAndRenderLeaderboard();
+        });
+    });
+
+    // Database Tools Listeners
+    document.getElementById('btnScanOrphans')?.addEventListener('click', () => scanAndPurgeOrphans('scan'));
+    document.getElementById('btnRecalculateScores')?.addEventListener('click', () => migrateHistoricalScores('scan'));
 }
 
 // PDF REPORT CENTER LOGIC
@@ -1541,7 +1647,7 @@ function generateAllStudentsReport(action, instName, periodStr, startStr, endStr
                     <th>Completed</th>
                     <th>Missed</th>
                     <th>Completion %</th>
-                    <th>Attendance %</th>
+                    <th>Submission Rate %</th>
                 </tr>
             </thead>
             <tbody>
@@ -1569,7 +1675,7 @@ function generateAllStudentsReport(action, instName, periodStr, startStr, endStr
         studentRecs.forEach(r => {
             keys.forEach(k => {
                 const val = r[k] || r.prayers?.[k];
-                if (val === 'Jamaat' || val === 'Individual') {
+                if (val === 'Jamaat' || val === 'Individual' || val === 'Qaza') {
                     completed++;
                     pStats[k]++;
                 } else {
@@ -1671,6 +1777,7 @@ async function generateSingleStudentReport(action, instName, studentId, periodSt
             const val = r[k] || r.prayers?.[k];
             if (val === 'Jamaat') { completed++; return 'Jam (Y)'; }
             if (val === 'Individual') { completed++; return 'Ind (Y)'; }
+            if (val === 'Qaza') { completed++; return 'Qaz (Y)'; }
             if (val === 'Incorrect') { missed++; return 'Inc (N)'; }
             if (val === 'Not Prayed') { missed++; return 'Mis (N)'; }
             missed++;
@@ -1751,7 +1858,7 @@ async function generateSingleStudentReport(action, instName, studentId, periodSt
                 <div style="flex:1; min-width:200px; border-left:1px solid #e2e8f0; padding-left:20px;">
                     <div>Class Rank: <strong>${classRank}</strong></div>
                     <div>Prayer Completion: <strong>${completionPct}%</strong></div>
-                    <div>Attendance Rate: <strong>${attendancePct}%</strong></div>
+                    <div>Submission Rate: <strong>${attendancePct}%</strong></div>
                     <div>Accumulated Points: <strong>${accumulatedPoints} pts</strong></div>
                 </div>
             </div>
@@ -1779,7 +1886,7 @@ async function generateSingleStudentReport(action, instName, studentId, periodSt
         </table>
         
         <div style="margin-top: 20px; font-size: 8pt; color: #555;">
-            * Legend: <strong>Jam (Y)</strong>: Prayed in Congregation, <strong>Ind (Y)</strong>: Prayed Individually, <strong>Inc (N)</strong>: Mistakenly Prayed, <strong>Mis (N)</strong>: Missed, <strong>—</strong>: No Entry.
+            * Legend: <strong>Jam (Y)</strong>: Prayed in Congregation, <strong>Ind (Y)</strong>: Prayed Individually, <strong>Qaz (Y)</strong>: Qaza, <strong>Inc (N)</strong>: Mistakenly Prayed, <strong>Mis (N)</strong>: Missed, <strong>—</strong>: No Entry.
         </div>
         
         <div style="margin-top: 20px; background-color: #f9f9f9; padding: 10px 15px; border-radius: 6px; border:1px solid #eee; font-size:9pt;">
@@ -1857,3 +1964,483 @@ async function loadAnnouncementsBanner() {
         console.error("Failed to load global announcements", err);
     }
 }
+
+// ==========================================
+// LEADERBOARD & CHARTS LOGIC
+// ==========================================
+async function initLeaderboard() {
+    const classSelect = document.getElementById('leaderboardClassSelect');
+    if (!classSelect) return;
+    classSelect.innerHTML = '<option value="">Select Class</option>';
+
+    try {
+        if (!madrasaId) return;
+        const q = query(collection(db, "classes"), where("madrasaId", "==", madrasaId));
+        const snap = await getDocs(q);
+        
+        let classes = [];
+        snap.forEach(d => classes.push({ id: d.id, ...d.data() }));
+        classes.sort((a, b) => a.name.localeCompare(b.name));
+        
+        classes.forEach(c => {
+            classSelect.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+        });
+
+        if (classes.length > 0) {
+            classSelect.value = classes[0].id;
+            leaderboardClassId = classes[0].id;
+            await fetchAndRenderLeaderboard();
+        } else {
+            document.getElementById('leaderboardTableBody').innerHTML = `<tr><td colspan="7" class="text-center py-4 text-muted">No classes found. Please create a class first.</td></tr>`;
+        }
+    } catch(err) {
+        console.error("Failed to load classes for leaderboard", err);
+    }
+}
+
+async function fetchAndRenderLeaderboard() {
+    const tbody = document.getElementById('leaderboardTableBody');
+    if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4"><span class="spinner-border spinner-border-sm me-2"></span>Loading rankings...</td></tr>`;
+    }
+
+    try {
+        if (!madrasaId || !leaderboardClassId) return;
+
+        // Calculate date range
+        const today = new Date();
+        const offset = today.getTimezoneOffset() * 60000;
+        const todayLocal = new Date(today.getTime() - offset);
+        const todayStr = todayLocal.toISOString().split('T')[0];
+
+        const daysAgo = leaderboardPeriod === 'weekly' ? 6 : 29;
+        const startDateLocal = new Date(todayLocal.getTime() - (daysAgo * 24 * 60 * 60 * 1000));
+        const startStr = startDateLocal.toISOString().split('T')[0];
+
+        // 1. Fetch Students
+        const stuQ = query(collection(db, "students"), where("madrasaId", "==", madrasaId), where("classId", "==", leaderboardClassId));
+        const stuSnap = await getDocs(stuQ);
+        let students = [];
+        stuSnap.forEach(d => {
+            students.push({ id: d.id, ...d.data() });
+        });
+
+        if (students.length === 0) {
+            if (tbody) {
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-muted">No students in this class.</td></tr>`;
+            }
+            document.getElementById('leaderboardPodium').innerHTML = '';
+            clearLeaderboardCharts();
+            return;
+        }
+
+        // 2. Fetch Records
+        const recQ = query(collection(db, "records"), where("madrasaId", "==", madrasaId), where("classId", "==", leaderboardClassId));
+        const recSnap = await getDocs(recQ);
+        let records = [];
+        recSnap.forEach(d => {
+            records.push(d.data());
+        });
+
+        const filteredRecords = records.filter(r => r.date >= startStr && r.date <= todayStr);
+        const expectedDays = leaderboardPeriod === 'weekly' ? 7 : 30;
+
+        let studentsStats = students.map(student => {
+            const studentRecs = filteredRecords.filter(r => r.studentId === student.id);
+            
+            let prayerScore = 0;
+            let subjectScore = 0;
+            let salawatCount = 0;
+            let loggedDays = studentRecs.length;
+            let lastActivityDate = "";
+            let completedPrayersCount = 0;
+
+            let jamCount = 0;
+            let indCount = 0;
+            let qazCount = 0;
+            let misCount = 0;
+
+            const keys = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+
+            studentRecs.forEach(r => {
+                prayerScore += Number(r.prayerScore) || 0;
+                subjectScore += Number(r.subjectScore) || 0;
+                salawatCount += Number(r.salawatCount) || 0;
+                
+                if (!lastActivityDate || r.date > lastActivityDate) {
+                    lastActivityDate = r.date;
+                }
+
+                keys.forEach(k => {
+                    const val = r[k] || r.prayers?.[k];
+                    if (val === 'Jamaat') {
+                        completedPrayersCount++;
+                        jamCount++;
+                    } else if (val === 'Individual') {
+                        completedPrayersCount++;
+                        indCount++;
+                    } else if (val === 'Qaza') {
+                        completedPrayersCount++;
+                        qazCount++;
+                    } else {
+                        misCount++;
+                    }
+                });
+            });
+
+            prayerScore = parseFloat(prayerScore.toFixed(1));
+            subjectScore = parseFloat(subjectScore.toFixed(1));
+
+            const totalPrayersCount = loggedDays * 5;
+            const prayerPct = totalPrayersCount > 0 ? Math.round((completedPrayersCount / totalPrayersCount) * 100) : 0;
+            const attendancePct = Math.round((loggedDays / expectedDays) * 100);
+
+            return {
+                id: student.id,
+                name: student.name,
+                admission_number: student.admission_number || 'None',
+                prayerScore,
+                subjectScore,
+                totalScore: parseFloat((prayerScore + subjectScore).toFixed(1)),
+                salawatCount,
+                prayerPct,
+                attendancePct,
+                lastActivityDate: lastActivityDate || 'No Activity',
+                jamCount,
+                indCount,
+                qazCount,
+                misCount
+            };
+        });
+
+        // Sort: 1. Highest Prayer Score -> 2. Highest Attendance % -> 3. Most Recent Activity
+        studentsStats.sort((a, b) => {
+            if (b.prayerScore !== a.prayerScore) {
+                return b.prayerScore - a.prayerScore;
+            }
+            if (b.attendancePct !== a.attendancePct) {
+                return b.attendancePct - a.attendancePct;
+            }
+            if (a.lastActivityDate === 'No Activity' && b.lastActivityDate !== 'No Activity') return 1;
+            if (b.lastActivityDate === 'No Activity' && a.lastActivityDate !== 'No Activity') return -1;
+            return b.lastActivityDate.localeCompare(a.lastActivityDate);
+        });
+
+        // Render visual podium (Top 3)
+        const podiumCont = document.getElementById('leaderboardPodium');
+        if (podiumCont) {
+            podiumCont.innerHTML = '';
+            const places = [];
+            if (studentsStats[0]) places.push({ rank: 1, student: studentsStats[0], emoji: '🥇', class: 'podium-rank-1', order: 2 });
+            if (studentsStats[1]) places.push({ rank: 2, student: studentsStats[1], emoji: '🥈', class: 'podium-rank-2', order: 1 });
+            if (studentsStats[2]) places.push({ rank: 3, student: studentsStats[2], emoji: '🥉', class: 'podium-rank-3', order: 3 });
+
+            places.sort((a, b) => a.order - b.order);
+
+            places.forEach(p => {
+                podiumCont.innerHTML += `
+                    <div class="col-12 col-sm-4 order-${p.order}">
+                        <div class="podium-card ${p.class} text-center h-100 py-3 shadow-sm">
+                            <div class="medal-icon">${p.emoji}</div>
+                            <h6 class="fw-bold mb-1 text-dark text-truncate">${p.student.name}</h6>
+                            <p class="text-muted small mb-2">Adm: ${p.student.admission_number}</p>
+                            <h4 class="fw-bold text-success mb-2">${p.student.prayerScore} <span class="fs-6 text-muted fw-normal">Pts</span></h4>
+                            
+                            <div class="mt-3 pt-2 border-top d-flex justify-content-around">
+                                <div class="px-2">
+                                    <small class="text-muted d-block" style="font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px;">Prayer Completion</small>
+                                    <span class="fw-bold text-success fs-4 d-block mt-1">${p.student.prayerPct}%</span>
+                                </div>
+                                <div class="px-2 border-start">
+                                    <small class="text-muted d-block" style="font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px;">Submission Rate</small>
+                                    <span class="fw-bold text-primary fs-4 d-block mt-1">${p.student.attendancePct}%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // Render rankings table
+        if (tbody) {
+            tbody.innerHTML = '';
+            studentsStats.forEach((s, idx) => {
+                const rankEmoji = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}`;
+                const rankClass = idx < 3 ? 'fw-bold fs-5 text-warning' : 'text-muted';
+                
+                tbody.innerHTML += `
+                    <tr class="border-bottom border-light">
+                        <td class="text-center ${rankClass}">${rankEmoji}</td>
+                        <td><strong>${s.name}</strong></td>
+                        <td class="text-muted">${s.admission_number}</td>
+                        <td class="text-center fw-bold text-success">${s.prayerScore} <small class="text-muted fw-normal">(Total: ${s.totalScore})</small></td>
+                        <td class="text-center">
+                            <div class="d-flex flex-column align-items-center">
+                                <span class="fw-bold text-success" style="font-size: 1rem; line-height: 1.2;">${s.prayerPct}%</span>
+                                <div class="progress w-100 mt-1" style="height: 6px; background-color: #e9ecef; border-radius: 3px; max-width: 90px;">
+                                    <div class="progress-bar bg-success" role="progressbar" style="width: ${s.prayerPct}%;" aria-valuenow="${s.prayerPct}" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="text-center"><span class="badge bg-primary bg-opacity-10 text-primary fw-bold">${s.attendancePct}%</span></td>
+                        <td class="text-muted small">${s.lastActivityDate}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        // Aggregate counts for chart
+        let totalJam = 0, totalInd = 0, totalQaz = 0, totalMis = 0;
+        studentsStats.forEach(s => {
+            totalJam += s.jamCount;
+            totalInd += s.indCount;
+            totalQaz += s.qazCount;
+            totalMis += s.misCount;
+        });
+
+        renderDistributionChart(totalJam, totalInd, totalQaz, totalMis);
+        renderTopPerformersChart(studentsStats.slice(0, 5));
+
+    } catch(err) {
+        console.error("Leaderboard render error", err);
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="7" class="alert alert-danger text-center">Failed to load rankings: ${err.message}</td></tr>`;
+        }
+    }
+}
+
+function clearLeaderboardCharts() {
+    if (chartDistributionInstance) {
+        chartDistributionInstance.destroy();
+        chartDistributionInstance = null;
+    }
+    if (chartPerformersInstance) {
+        chartPerformersInstance.destroy();
+        chartPerformersInstance = null;
+    }
+}
+
+function renderDistributionChart(jam, ind, qaz, mis) {
+    const ctx = document.getElementById('chartPrayerDistribution')?.getContext('2d');
+    if (!ctx) return;
+
+    if (chartDistributionInstance) {
+        chartDistributionInstance.destroy();
+    }
+
+    if (jam === 0 && ind === 0 && qaz === 0 && mis === 0) {
+        return;
+    }
+
+    chartDistributionInstance = new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: ['Jamaat', 'Individual', 'Qaza', 'Missed'],
+            datasets: [{
+                data: [jam, ind, qaz, mis],
+                backgroundColor: ['#10b981', '#f59e0b', '#0dcaf0', '#ef4444'],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        font: { family: 'Inter', weight: 'bold' }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderTopPerformersChart(topStudents) {
+    const ctx = document.getElementById('chartTopPerformers')?.getContext('2d');
+    if (!ctx) return;
+
+    if (chartPerformersInstance) {
+        chartPerformersInstance.destroy();
+    }
+
+    if (topStudents.length === 0) return;
+
+    const labels = topStudents.map(s => s.name);
+    const data = topStudents.map(s => s.prayerScore);
+
+    chartPerformersInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Prayer Points',
+                data: data,
+                backgroundColor: 'rgba(21, 94, 77, 0.85)',
+                borderColor: '#155e4d',
+                borderWidth: 2,
+                borderRadius: 8
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    title: { display: true, text: 'Points' }
+                },
+                y: {
+                    grid: { display: false }
+                }
+            }
+        }
+    });
+}
+
+// ==========================================
+// DATABASE TOOLS & HEALTH LOGIC
+// ==========================================
+async function scanAndPurgeOrphans(action = 'scan') {
+    const resultDiv = document.getElementById('orphanScanResult');
+    if (!resultDiv) return;
+    
+    resultDiv.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>${action === 'scan' ? 'Scanning' : 'Purging'} database...`;
+    
+    try {
+        if (!madrasaId) return;
+        
+        const stuQ = query(collection(db, "students"), where("madrasaId", "==", madrasaId));
+        const stuSnap = await getDocs(stuQ);
+        const studentIds = new Set();
+        stuSnap.forEach(d => studentIds.add(d.id));
+        
+        const recQ = query(collection(db, "records"), where("madrasaId", "==", madrasaId));
+        const recSnap = await getDocs(recQ);
+        
+        let orphans = [];
+        recSnap.forEach(d => {
+            const data = d.data();
+            if (data.studentId && !studentIds.has(data.studentId)) {
+                orphans.push({ id: d.id, ...data });
+            }
+        });
+        
+        if (orphans.length === 0) {
+            resultDiv.innerHTML = `<div class="alert alert-success mt-2 py-2 mb-0"><i class="bi bi-check-circle-fill me-2"></i>No orphan records found. Database is healthy!</div>`;
+            return;
+        }
+        
+        if (action === 'scan') {
+            resultDiv.innerHTML = `
+                <div class="alert alert-warning mt-2 py-2 mb-2"><i class="bi bi-exclamation-triangle-fill me-2"></i>Found <strong>${orphans.length}</strong> orphan records.</div>
+                <button id="btnPurgeOrphans" class="btn btn-danger btn-sm rounded-pill fw-bold px-3"><i class="bi bi-trash-fill me-1"></i>Delete Orphans</button>
+            `;
+            
+            document.getElementById('btnPurgeOrphans').onclick = () => scanAndPurgeOrphans('purge');
+        } else {
+            const chunkSize = 400;
+            let chunksCount = 0;
+            for (let i = 0; i < orphans.length; i += chunkSize) {
+                const chunk = orphans.slice(i, i + chunkSize);
+                const batch = writeBatch(db);
+                chunk.forEach(o => {
+                    batch.delete(doc(db, "records", o.id));
+                });
+                await batch.commit();
+                chunksCount += chunk.length;
+            }
+            resultDiv.innerHTML = `<div class="alert alert-success mt-2 py-2 mb-0"><i class="bi bi-check-circle-fill me-2"></i>Successfully deleted <strong>${chunksCount}</strong> orphan records.</div>`;
+        }
+    } catch(err) {
+        resultDiv.innerHTML = `<div class="alert alert-danger mt-2 py-2 mb-0">Error: ${err.message}</div>`;
+    }
+}
+
+async function migrateHistoricalScores(action = 'scan') {
+    const resultDiv = document.getElementById('recalcScanResult');
+    if (!resultDiv) return;
+    
+    resultDiv.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>${action === 'scan' ? 'Scanning' : 'Migrating'} records...`;
+    
+    try {
+        if (!madrasaId) return;
+        
+        const recQ = query(collection(db, "records"), where("madrasaId", "==", madrasaId));
+        const recSnap = await getDocs(recQ);
+        
+        const PRAYER_SCORES = { "Jamaat": 2.0, "Individual": 1.0, "Qaza": 0.5, "Incorrect": 0.0, "Not Prayed": 0.0 };
+        const keys = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+        
+        let outOfSyncRecords = [];
+        recSnap.forEach(d => {
+            const r = d.data();
+            
+            let expectedPrayerScore = 0;
+            keys.forEach(k => {
+                const val = r[k] || r.prayers?.[k];
+                expectedPrayerScore += PRAYER_SCORES[val] || 0;
+            });
+            expectedPrayerScore = parseFloat(expectedPrayerScore.toFixed(1));
+            
+            const expectedTotalScore = parseFloat((expectedPrayerScore + (Number(r.subjectScore) || 0)).toFixed(1));
+            
+            const currentPrayerScore = Number(r.prayerScore) || 0;
+            const currentTotalScore = Number(r.totalScore) || 0;
+            
+            if (Math.abs(currentPrayerScore - expectedPrayerScore) > 0.01 || Math.abs(currentTotalScore - expectedTotalScore) > 0.01) {
+                outOfSyncRecords.push({
+                    id: d.id,
+                    ref: d.ref,
+                    payload: {
+                        prayerScore: expectedPrayerScore,
+                        totalScore: expectedTotalScore
+                    }
+                });
+            }
+        });
+        
+        if (outOfSyncRecords.length === 0) {
+            resultDiv.innerHTML = `<div class="alert alert-success mt-2 py-2 mb-0"><i class="bi bi-check-circle-fill me-2"></i>All records are synced with the new scoring model!</div>`;
+            return;
+        }
+        
+        if (action === 'scan') {
+            resultDiv.innerHTML = `
+                <div class="alert alert-warning mt-2 py-2 mb-2"><i class="bi bi-exclamation-triangle-fill me-2"></i>Found <strong>${outOfSyncRecords.length}</strong> records using old scoring system.</div>
+                <button id="btnRunRecalc" class="btn btn-primary btn-sm rounded-pill fw-bold px-3"><i class="bi bi-play-fill me-1"></i>Run Recalculation</button>
+            `;
+            
+            document.getElementById('btnRunRecalc').onclick = () => migrateHistoricalScores('migrate');
+        } else {
+            const chunkSize = 400;
+            let chunksCount = 0;
+            for (let i = 0; i < outOfSyncRecords.length; i += chunkSize) {
+                const chunk = outOfSyncRecords.slice(i, i + chunkSize);
+                const batch = writeBatch(db);
+                chunk.forEach(item => {
+                    batch.update(item.ref, item.payload);
+                });
+                await batch.commit();
+                chunksCount += chunk.length;
+            }
+            
+            resultDiv.innerHTML = `<div class="alert alert-success mt-2 py-2 mb-0"><i class="bi bi-check-circle-fill me-2"></i>Successfully updated <strong>${chunksCount}</strong> records to new scores.</div>`;
+        }
+    } catch(err) {
+        resultDiv.innerHTML = `<div class="alert alert-danger mt-2 py-2 mb-0">Error: ${err.message}</div>`;
+    }
+}
+
+// Expose leaderboard and cleanup functions globally
+window.initLeaderboard = initLeaderboard;
+window.fetchAndRenderLeaderboard = fetchAndRenderLeaderboard;
+window.scanAndPurgeOrphans = scanAndPurgeOrphans;
+window.migrateHistoricalScores = migrateHistoricalScores;
+

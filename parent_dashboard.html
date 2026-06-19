@@ -268,24 +268,158 @@
                 <!-- REPORTS TAB -->
                 <div class="tab-pane fade" id="reports" role="tabpanel">
                     
-                    <!-- Chart Card -->
-                    <div class="card stat-card p-4 mb-4">
-                        <h6 class="fw-bold text-dark mb-3"><i class="bi bi-graph-up-arrow text-success me-2"></i>Points Trend (Last 30 Days)</h6>
-                        <div class="chart-container">
-                            <canvas id="parentTrendChart"></canvas>
+                    <!-- Filter Controls -->
+                    <div class="card stat-card p-3 mb-4 border-0 shadow-sm bg-white">
+                        <div class="row align-items-center g-2">
+                            <div class="col-auto">
+                                <span class="fw-bold text-dark"><i class="bi bi-funnel-fill text-success me-2"></i>Filter Date Range:</span>
+                            </div>
+                            <div class="col-auto">
+                                <select id="reportFilterSelect" class="form-select form-select-sm rounded-pill px-3 fw-semibold border-secondary-subtle" style="width: auto; min-width: 180px;">
+                                    <option value="this-week">This Week</option>
+                                    <option value="last-7-days" selected>Last 7 Days</option>
+                                    <option value="this-month">This Month</option>
+                                    <option value="last-30-days">Last 30 Days</option>
+                                    <option value="last-3-months">Last 3 Months</option>
+                                    <option value="last-6-months">Last 6 Months</option>
+                                    <option value="this-year">This Year</option>
+                                    <option value="last-12-months">Last 12 Months</option>
+                                    <option value="custom">Custom Range</option>
+                                </select>
+                            </div>
+                            <div class="col-auto d-none" id="customRangeInputs">
+                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                    <input type="date" id="reportStartDate" class="form-control form-control-sm rounded-pill px-3" style="width: auto;">
+                                    <span class="small fw-semibold text-muted">to</span>
+                                    <input type="date" id="reportEndDate" class="form-control form-control-sm rounded-pill px-3" style="width: auto;">
+                                    <button id="btnApplyCustomRange" class="btn btn-sm btn-success rounded-pill px-3 fw-bold">Apply</button>
+                                </div>
+                            </div>
+                            <div class="col text-end d-none d-md-block">
+                                <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-2 fw-bold" id="resolvedRangeDisplay">Loading...</span>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Prayer Breakdown -->
-                    <div class="card stat-card p-4">
-                        <h6 class="fw-bold text-dark mb-3"><i class="bi bi-bar-chart-steps text-success me-2"></i>Prayer Breakdown (Summary)</h6>
-                        <div class="row g-2 text-center" id="prayerBreakdownContainer">
-                            <!-- Populated dynamically -->
+                    <!-- Empty State Fallback -->
+                    <div id="reportsEmptyState" class="d-none text-center py-5 bg-white rounded-4 shadow-sm border border-light">
+                        <i class="bi bi-graph-up-arrow text-muted opacity-25 fs-1 mb-3 d-block"></i>
+                        <h5 class="fw-bold text-dark">No Analytics Data Available</h5>
+                        <p class="text-muted mb-0" id="reportsEmptyStateText">There are no tracker submissions logged for the selected date range.</p>
+                    </div>
+
+                    <!-- Analytics Content Wrapper -->
+                    <div id="reportsAnalyticsWrapper">
+                        <!-- Advanced Metrics Summary Row -->
+                        <div class="row g-3 mb-4">
+                            <div class="col-6 col-lg-3">
+                                <div class="card stat-card p-3 border-0 bg-white shadow-sm text-center">
+                                    <h6 class="text-muted small fw-bold mb-1 text-uppercase tracking-wider">Submission Rate</h6>
+                                    <h3 class="fw-bold mb-0 text-success" id="reportSubmissionRate">0%</h3>
+                                    <small class="text-muted small fw-semibold" id="reportSubmissionCount">0 / 0 Days</small>
+                                </div>
+                            </div>
+                            <div class="col-6 col-lg-3">
+                                <div class="card stat-card p-3 border-0 bg-white shadow-sm text-center">
+                                    <h6 class="text-muted small fw-bold mb-1 text-uppercase tracking-wider">Avg Daily Score</h6>
+                                    <h3 class="fw-bold mb-0 text-primary" id="reportAvgScore">0</h3>
+                                    <small class="text-muted small fw-semibold" id="reportTotalPoints">0 Total Pts</small>
+                                </div>
+                            </div>
+                            <div class="col-6 col-lg-3">
+                                <div class="card stat-card p-3 border-0 bg-white shadow-sm text-center">
+                                    <h6 class="text-muted small fw-bold mb-1 text-uppercase tracking-wider">Prayer Completion</h6>
+                                    <h3 class="fw-bold mb-0 text-info" id="reportCompletionRate">0%</h3>
+                                    <small class="text-muted small fw-semibold" id="reportPrayerCount">0 / 0 Prayers</small>
+                                </div>
+                            </div>
+                            <div class="col-6 col-lg-3">
+                                <div class="card stat-card p-3 border-0 bg-white shadow-sm text-center">
+                                    <h6 class="text-muted small fw-bold mb-1 text-uppercase tracking-wider">Salawat Recited</h6>
+                                    <h3 class="fw-bold mb-0 text-warning" id="reportSalawatCount">0</h3>
+                                    <small class="text-muted small fw-semibold">Total Salawat</small>
+                                </div>
+                            </div>
                         </div>
-                        <div class="mt-4 d-flex justify-content-center gap-4" style="font-size: 0.8rem;">
-                            <div><span class="text-success fw-bold">■</span> Jamaat (2 pts)</div>
-                            <div><span class="text-warning fw-bold">■</span> Individual (1 pt)</div>
-                            <div><span class="text-danger fw-bold">■</span> Missed (0 pts)</div>
+
+                        <!-- Charts Layout Grid -->
+                        <div class="row g-4 mb-4">
+                            <!-- Visual 1: Circular Completion Progress -->
+                            <div class="col-md-6 col-lg-4">
+                                <div class="card stat-card p-4 h-100 border-0 shadow-sm bg-white text-center d-flex flex-column align-items-center justify-content-center">
+                                    <h6 class="fw-bold text-dark mb-3 w-100 text-start"><i class="bi bi-compass text-success me-2"></i>Overall Completion Rate</h6>
+                                    <div class="my-auto position-relative d-flex justify-content-center align-items-center" style="width: 130px; height: 130px;">
+                                        <svg width="130" height="130" viewBox="0 0 120 120">
+                                            <circle cx="60" cy="60" r="52" fill="none" stroke="#f1f5f9" stroke-width="10" />
+                                            <circle id="circularProgressPath" cx="60" cy="60" r="52" fill="none" stroke="#10b981" stroke-width="10" 
+                                                    stroke-dasharray="326.7" stroke-dashoffset="326.7" stroke-linecap="round" transform="rotate(-90 60 60)" 
+                                                    style="transition: stroke-dashoffset 0.6s ease-in-out;" />
+                                            <text id="circularProgressText" x="60" y="66" text-anchor="middle" font-size="20" font-weight="800" fill="#1e293b">0%</text>
+                                        </svg>
+                                    </div>
+                                    <p class="text-muted small fw-bold mt-3 mb-0">Total Tracked Days Completion Percentage</p>
+                                </div>
+                            </div>
+
+                            <!-- Visual 2: Prayer Status Share (Pie) -->
+                            <div class="col-md-6 col-lg-4">
+                                <div class="card stat-card p-4 h-100 border-0 shadow-sm bg-white">
+                                    <h6 class="fw-bold text-dark mb-3"><i class="bi bi-pie-chart text-success me-2"></i>Prayer Status Share</h6>
+                                    <div class="chart-container">
+                                        <canvas id="prayerStatusChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Visual 3: Individual Prayer Comparison (Bar) -->
+                            <div class="col-md-12 col-lg-4">
+                                <div class="card stat-card p-4 h-100 border-0 shadow-sm bg-white">
+                                    <h6 class="fw-bold text-dark mb-3"><i class="bi bi-bar-chart text-success me-2"></i>Individual Prayer Comparison</h6>
+                                    <div class="chart-container">
+                                        <canvas id="prayerComparisonChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Visual 4: Daily Consistency (Line) -->
+                            <div class="col-md-12 col-lg-6">
+                                <div class="card stat-card p-4 border-0 shadow-sm bg-white">
+                                    <h6 class="fw-bold text-dark mb-3"><i class="bi bi-activity text-success me-2"></i>Daily Consistency (Points Trend)</h6>
+                                    <div class="chart-container">
+                                        <canvas id="dailyConsistencyChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Visual 5: Weekly Comparison (Bar) -->
+                            <div class="col-md-12 col-lg-6">
+                                <div class="card stat-card p-4 border-0 shadow-sm bg-white">
+                                    <h6 class="fw-bold text-dark mb-3"><i class="bi bi-calendar-range text-success me-2"></i>Weekly Performance Comparison</h6>
+                                    <div class="chart-container">
+                                        <canvas id="weeklyComparisonChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Visual 6: Monthly Progress Trend (Line) -->
+                            <div class="col-md-6 col-lg-6">
+                                <div class="card stat-card p-4 border-0 shadow-sm bg-white">
+                                    <h6 class="fw-bold text-dark mb-3"><i class="bi bi-graph-up text-success me-2"></i>Monthly Progress Trend</h6>
+                                    <div class="chart-container">
+                                        <canvas id="monthlyTrendChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Visual 7: Yearly Trend (Bar) -->
+                            <div class="col-md-6 col-lg-6">
+                                <div class="card stat-card p-4 border-0 shadow-sm bg-white">
+                                    <h6 class="fw-bold text-dark mb-3"><i class="bi bi-calendar3 text-success me-2"></i>Yearly Trend</h6>
+                                    <div class="chart-container">
+                                        <canvas id="yearlyTrendChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -298,6 +432,8 @@
 
     <!-- Bootstrap Bundle JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- SweetAlert2 CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <!-- App Logic script -->
     <script type="module">
@@ -308,8 +444,8 @@
         let studentId = null;
         let admissionNumber = null;
         let madrasaId = null;
-        let allRecords = [];
-        let chartInstance = null;
+        let allRecords = null; // initially null to support lazy loading
+        const chartInstances = {}; // store instances to destroy on redraw
 
         document.addEventListener('DOMContentLoaded', async () => {
             studentId = sessionStorage.getItem('parentStudentId');
@@ -317,8 +453,16 @@
             madrasaId = sessionStorage.getItem('activeMadrasaId');
 
             if (!studentId || !admissionNumber || !madrasaId) {
-                alert("Session expired. Please enter Admission Number again.");
-                window.location.href = 'index.html';
+                Swal.fire({
+                    title: 'Session Expired',
+                    text: 'Session expired. Please enter Admission Number again.',
+                    icon: 'warning',
+                    confirmButtonColor: '#155e4d',
+                    confirmButtonText: 'OK',
+                    customClass: { popup: 'rounded-4' }
+                }).then(() => {
+                    window.location.href = 'index.html';
+                });
                 return;
             }
 
@@ -330,33 +474,73 @@
                 window.location.href = 'index.html' + (activeMadrasaId ? '?m=' + activeMadrasaId : '');
             });
 
+            // Tab Event Listeners for lazy loading
+            const historyTab = document.getElementById('history-tab');
+            if (historyTab) {
+                historyTab.addEventListener('shown.bs.tab', async () => {
+                    const tbody = document.getElementById('historyTableBody');
+                    if (!allRecords) {
+                        tbody.innerHTML = `
+                            <tr>
+                                <td colspan="9" class="text-center py-4">
+                                    <div class="spinner-border spinner-border-sm text-success" role="status"></div>
+                                    <span class="ms-2 fw-bold text-muted">Retrieving history logs...</span>
+                                </td>
+                            </tr>
+                        `;
+                    }
+                    await ensureAllRecordsFetched();
+                    renderHistoryTable();
+                });
+            }
+
+            const reportsTab = document.getElementById('reports-tab');
+            if (reportsTab) {
+                reportsTab.addEventListener('shown.bs.tab', async () => {
+                    const reportsWrapper = document.getElementById('reportsAnalyticsWrapper');
+                    const emptyState = document.getElementById('reportsEmptyState');
+                    if (!allRecords) {
+                        reportsWrapper.classList.add('d-none');
+                        emptyState.classList.remove('d-none');
+                        emptyState.innerHTML = `
+                            <div class="py-5 text-center">
+                                <div class="spinner-border text-success" role="status"></div>
+                                <p class="mt-3 fw-bold text-muted">Retrieving analytics records...</p>
+                            </div>
+                        `;
+                    }
+                    await ensureAllRecordsFetched();
+                    renderReports();
+                });
+            }
+
+            // Setup filter select change listener
+            const filterSelect = document.getElementById('reportFilterSelect');
+            if (filterSelect) {
+                filterSelect.addEventListener('change', () => {
+                    const wrapper = document.getElementById('customRangeInputs');
+                    if (filterSelect.value === 'custom') {
+                        wrapper.classList.remove('d-none');
+                    } else {
+                        wrapper.classList.add('d-none');
+                        renderReports();
+                    }
+                });
+            }
+
+            const btnApply = document.getElementById('btnApplyCustomRange');
+            if (btnApply) {
+                btnApply.addEventListener('click', () => {
+                    renderReports();
+                });
+            }
+
             await loadParentDashboardData();
         });
 
-        async function loadParentDashboardData() {
+        async function ensureAllRecordsFetched() {
+            if (allRecords !== null) return;
             try {
-                // 1. Fetch Student profile
-                const studentDoc = await getDoc(doc(db, "students", studentId));
-                if (!studentDoc.exists()) {
-                    throw new Error("Student profile not found. Session expired.");
-                }
-                const studentData = studentDoc.data();
-                
-                // Fetch class name
-                let className = "Class";
-                if (studentData.classId) {
-                    const classDoc = await getDoc(doc(db, "classes", studentData.classId));
-                    if (classDoc.exists()) {
-                        className = classDoc.data().name || "Class";
-                    }
-                }
-
-                // Render Header
-                document.getElementById('studentName').innerText = studentData.name || "Unknown Student";
-                document.getElementById('studentAvatar').innerText = (studentData.name || "?").charAt(0).toUpperCase();
-                document.getElementById('studentMeta').innerText = `Class: ${className} | Admission: ${admissionNumber}`;
-
-                // 2. Fetch all student records
                 const qRecords = query(
                     collection(db, "records"),
                     where("madrasaId", "==", madrasaId),
@@ -364,26 +548,87 @@
                 );
                 const snap = await getDocs(qRecords);
                 
-                allRecords = [];
+                const fetched = [];
                 snap.forEach(d => {
-                    allRecords.push(d.data());
+                    fetched.push(d.data());
                 });
+                fetched.sort((a, b) => b.date.localeCompare(a.date));
+                allRecords = fetched;
 
-                // Sort by date descending for overview & history
-                allRecords.sort((a, b) => b.date.localeCompare(a.date));
+                // Sync UI stats
+                updateOverviewStatsFromRecords();
+            } catch (err) {
+                console.error("Failed to load historical records:", err);
+                allRecords = [];
+            }
+        }
 
-                // 3. Render Overview stats
-                renderStats();
+        function updateOverviewStatsFromRecords() {
+            let pts = 0, salawat = 0, subPts = 0;
+            allRecords.forEach(r => {
+                pts += Number(r.totalScore) || 0;
+                salawat += Number(r.salawatCount) || 0;
+                subPts += Number(r.subjectScore) || 0;
+            });
+            pts = parseFloat(pts.toFixed(1));
+            subPts = parseFloat(subPts.toFixed(1));
 
-                // 4. Render History list
-                renderHistoryTable();
+            document.getElementById('statPoints').innerText = pts;
+            document.getElementById('statSalawat').innerText = salawat;
+            document.getElementById('statSubjects').innerText = subPts;
+            document.getElementById('statDays').innerText = allRecords.length;
 
-                // 5. Render Chart & Breakdown (Reports)
-                renderReports();
+            localStorage.setItem(`points_${studentId}`, pts);
+            localStorage.setItem(`salawat_${studentId}`, salawat);
+            localStorage.setItem(`days_${studentId}`, allRecords.length);
+        }
 
-                // Hide loading & show content
+        async function loadParentDashboardData() {
+            try {
+                // Read from cache first to render immediately!
+                const cachedName = localStorage.getItem('cachedStudentName');
+                const cachedClass = localStorage.getItem('cachedClassName');
+                
+                if (cachedName) {
+                    document.getElementById('studentName').innerText = cachedName;
+                    document.getElementById('studentAvatar').innerText = cachedName.charAt(0).toUpperCase();
+                    document.getElementById('studentMeta').innerText = `Class: ${cachedClass || 'Class'} | Admission: ${admissionNumber}`;
+                    
+                    const cachedPts = localStorage.getItem(`points_${studentId}`) || '0';
+                    const cachedSalawat = localStorage.getItem(`salawat_${studentId}`) || '0';
+                    const cachedDays = localStorage.getItem(`days_${studentId}`) || '0';
+                    
+                    document.getElementById('statPoints').innerText = cachedPts;
+                    document.getElementById('statSalawat').innerText = cachedSalawat;
+                    document.getElementById('statDays').innerText = cachedDays;
+                }
+
+                // Hide loading spinner and show dashboard content shell immediately
                 document.getElementById('loadingState').classList.add('d-none');
                 document.getElementById('dashboardContent').classList.remove('d-none');
+
+                // Now fetch student profile and class in background to update header (just in case they changed)
+                const studentDoc = await getDoc(doc(db, "students", studentId));
+                if (studentDoc.exists()) {
+                    const studentData = studentDoc.data();
+                    let className = "Class";
+                    if (studentData.classId) {
+                        const classDoc = await getDoc(doc(db, "classes", studentData.classId));
+                        if (classDoc.exists()) {
+                            className = classDoc.data().name || "Class";
+                        }
+                    }
+                    
+                    localStorage.setItem('cachedStudentName', studentData.name);
+                    localStorage.setItem('cachedClassName', className);
+                    
+                    document.getElementById('studentName').innerText = studentData.name || "Unknown Student";
+                    document.getElementById('studentAvatar').innerText = (studentData.name || "?").charAt(0).toUpperCase();
+                    document.getElementById('studentMeta').innerText = `Class: ${className} | Admission: ${admissionNumber}`;
+                }
+
+                // Fetch TODAY'S or the LATEST daily log specifically to show on the Overview tab
+                await loadOverviewTabTodayRecord();
 
             } catch(err) {
                 console.error("Dashboard load failed", err);
@@ -395,82 +640,97 @@
             }
         }
 
-        function renderStats() {
-            let pts = 0, salawat = 0, subPts = 0;
-            allRecords.forEach(r => {
-                pts += Number(r.totalScore) || 0;
-                salawat += Number(r.salawatCount) || 0;
-                subPts += Number(r.subjectScore) || 0;
-            });
+        async function loadOverviewTabTodayRecord() {
+            let recordData = null;
+            try {
+                const today = new Date();
+                const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+                const todayRecId = `${studentId}_${todayStr}`;
+                
+                const recordDoc = await getDoc(doc(db, "records", todayRecId));
+                if (recordDoc.exists()) {
+                    recordData = recordDoc.data();
+                }
+            } catch (e) {
+                if (e.code !== 'permission-denied') {
+                    console.error("Error loading today's overview record", e);
+                }
+            }
 
-            document.getElementById('statPoints').innerText = pts;
-            document.getElementById('statSalawat').innerText = salawat;
-            document.getElementById('statSubjects').innerText = subPts;
-            document.getElementById('statDays').innerText = allRecords.length;
+            if (!recordData) {
+                // Check yesterday
+                try {
+                    const yesterday = new Date();
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    const yesterdayStr = yesterday.getFullYear() + '-' + String(yesterday.getMonth() + 1).padStart(2, '0') + '-' + String(yesterday.getDate()).padStart(2, '0');
+                    const yesterdayRecId = `${studentId}_${yesterdayStr}`;
+                    const recordDoc = await getDoc(doc(db, "records", yesterdayRecId));
+                    if (recordDoc.exists()) {
+                        recordData = recordDoc.data();
+                    }
+                } catch (e) {
+                    if (e.code !== 'permission-denied') {
+                        console.error("Error loading yesterday's overview record", e);
+                    }
+                }
+            }
 
-            if (allRecords.length > 0) {
-                const latest = allRecords[0];
-                document.getElementById('latestLogDate').innerText = latest.date;
+                if (recordData) {
+                    document.getElementById('latestLogDate').innerText = recordData.date;
+                    
+                    const prayers = recordData.prayers || {};
+                    const completedPrayers = Object.values(prayers).filter(val => val === 'Jamaat' || val === 'Individual' || val === 'Qaza').length;
+                    const pPct = Math.round((completedPrayers / 5) * 100);
 
-                // Render Progress circles
-                // Prayers: completed count / 5 * 100
-                const prayers = latest.prayers || {};
-                const completedPrayers = Object.values(prayers).filter(val => val === 'Jamaat' || val === 'Individual').length;
-                const pPct = Math.round((completedPrayers / 5) * 100);
+                    const sPct = recordData.subjectScore > 0 ? 100 : 0;
 
-                // Study progress: we need to find total class subjects.
-                // We'll read it based on subjectScore or default.
-                // Let's assume standard targets: study progress is scaled by subjectScore.
-                const sPct = latest.subjectScore > 0 ? 100 : 0; // simple binary completed check if no subject total is saved in record
+                    const subjectsArr = recordData.subjects || [];
+                    const totalSubjects = subjectsArr.length || 1;
+                    const tPct = Math.round(((completedPrayers + recordData.subjectScore) / (5 + totalSubjects)) * 100);
 
-                // Total progress = (completed prayers + subjectScore) / (5 + total subjects in record)
-                // For parent read, if we don't have total subjects, let's fetch from latest.subjects array length.
-                const subjectsArr = latest.subjects || [];
-                const totalSubjects = subjectsArr.length || 1; // fallback
-                const tPct = Math.round(((completedPrayers + latest.subjectScore) / (5 + totalSubjects)) * 100);
+                    updateProgressElement('progTotal', tPct, '#10b981');
+                    updateProgressElement('progPrayers', pPct, '#3b82f6');
+                    updateProgressElement('progStudy', sPct, '#f59e0b');
 
-                updateProgressElement('progTotal', tPct, '#10b981');
-                updateProgressElement('progPrayers', pPct, '#3b82f6');
-                updateProgressElement('progStudy', sPct, '#f59e0b');
+                    const emojiMap = { fajr: "🌅 Fajr", dhuhr: "☀️ Dhuhr", asr: "🌤 Asr", maghrib: "🌇 Maghrib", isha: "🌙 Isha" };
+                    const order = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
 
-                // Render latest tracker details list
-                const emojiMap = { fajr: "🌅 Fajr", dhuhr: "☀️ Dhuhr", asr: "🌤 Asr", maghrib: "🌇 Maghrib", isha: "🌙 Isha" };
-                const order = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+                    let itemsHtml = "";
+                    order.forEach(p => {
+                        const status = prayers[p] || 'Not Prayed';
+                        let badgeClass = "bg-danger text-white";
+                        if (status === 'Jamaat') badgeClass = "bg-success text-white";
+                        else if (status === 'Individual') badgeClass = "bg-warning text-dark";
+                        else if (status === 'Qaza') badgeClass = "bg-info text-white";
 
-                let itemsHtml = "";
-                order.forEach(p => {
-                    const status = prayers[p] || 'Not Prayed';
-                    let badgeClass = "bg-danger text-white";
-                    if (status === 'Jamaat') badgeClass = "bg-success text-white";
-                    else if (status === 'Individual') badgeClass = "bg-warning text-dark";
+                        itemsHtml += `
+                            <div class="d-flex justify-content-between align-items-center prayer-item">
+                                <span class="fw-bold text-dark">${emojiMap[p]}</span>
+                                <span class="badge rounded-pill prayer-badge ${badgeClass}">${status}</span>
+                            </div>
+                        `;
+                    });
 
                     itemsHtml += `
-                        <div class="d-flex justify-content-between align-items-center prayer-item">
-                            <span class="fw-bold text-dark">${emojiMap[p]}</span>
-                            <span class="badge rounded-pill prayer-badge ${badgeClass}">${status}</span>
+                        <div class="d-flex justify-content-between align-items-center prayer-item mt-3 border-top pt-3 bg-white">
+                            <div>
+                                <span class="fw-bold text-dark d-block">📚 Subjects Completed</span>
+                                <small class="text-muted fw-bold">Score: ${recordData.subjectScore}</small>
+                            </div>
+                            <span class="badge bg-light text-success border shadow-sm fw-bold rounded-pill px-3 py-2">${recordData.subjects?.length || 0} Studied</span>
                         </div>
                     `;
-                });
 
-                // Add study summary line
-                itemsHtml += `
-                    <div class="d-flex justify-content-between align-items-center prayer-item mt-3 border-top pt-3 bg-white">
-                        <div>
-                            <span class="fw-bold text-dark d-block">📚 Subjects Completed</span>
-                            <small class="text-muted fw-bold">Score: ${latest.subjectScore}</small>
-                        </div>
-                        <span class="badge bg-light text-success border shadow-sm fw-bold rounded-pill px-3 py-2">${latest.subjects?.length || 0} Studied</span>
-                    </div>
-                `;
-
-                document.getElementById('latestLogEntries').innerHTML = itemsHtml;
-
-            } else {
-                document.getElementById('latestLogDate').innerText = "No Logs Yet";
-                document.getElementById('latestLogEntries').innerHTML = `
-                    <p class="text-muted text-center py-4">No daily logs registered for this student yet.</p>
-                `;
-            }
+                    document.getElementById('latestLogEntries').innerHTML = itemsHtml;
+                } else {
+                    document.getElementById('latestLogDate').innerText = "No Logs Yet";
+                    document.getElementById('latestLogEntries').innerHTML = `
+                        <p class="text-muted text-center py-4">No daily logs registered for today or yesterday yet.</p>
+                    `;
+                    updateProgressElement('progTotal', 0, '#10b981');
+                    updateProgressElement('progPrayers', 0, '#3b82f6');
+                    updateProgressElement('progStudy', 0, '#f59e0b');
+                }
         }
 
         function updateProgressElement(id, pct, color) {
@@ -483,7 +743,7 @@
 
         function renderHistoryTable() {
             const tbody = document.getElementById('historyTableBody');
-            if (allRecords.length === 0) {
+            if (!allRecords || allRecords.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="9" class="text-center py-4 text-muted">No records found.</td></tr>`;
                 return;
             }
@@ -495,9 +755,10 @@
 
                 const cells = order.map(p => {
                     const status = prayers[p];
-                    if (!status || status === 'Not Prayed') return '<td class="text-center text-danger">&times;</td>';
-                    if (status === 'Jamaat') return '<td class="text-center text-success fw-bold">&#10003;</td>';
-                    return '<td class="text-center text-warning fw-bold">&#10003;</td>';
+                    if (status === 'Jamaat') return '<td class="text-center text-success fw-bold" title="Jamaat">&#10003;</td>';
+                    if (status === 'Individual') return '<td class="text-center text-warning fw-bold" title="Individual">&#10003;</td>';
+                    if (status === 'Qaza') return '<td class="text-center text-info fw-bold" title="Qaza">Q</td>';
+                    return '<td class="text-center text-danger">&times;</td>';
                 }).join('');
 
                 rows += `
@@ -513,83 +774,428 @@
             tbody.innerHTML = rows;
         }
 
-        function renderReports() {
-            if (allRecords.length === 0) return;
+        // Helper functions for dates & calculations
+        function getFilterDates(filterType, customStart = null, customEnd = null) {
+            const today = new Date();
+            let startDate = new Date();
+            let endDate = new Date();
 
-            // Generate breakdown
-            const pKeys = ["fajr", "dhuhr", "asr", "maghrib", "isha"];
-            const pNames = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"];
-            const pIcons = ["🌅", "☀️", "🌤", "🌇", "🌙"];
+            const formatDate = (d) => {
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            };
 
-            let breakdownHtml = "";
-            pKeys.forEach((key, idx) => {
-                let jam = 0, ind = 0, miss = 0;
-                allRecords.forEach(r => {
-                    const status = r.prayers?.[key];
-                    if (status === 'Jamaat') jam++;
-                    else if (status === 'Individual') ind++;
-                    else miss++;
-                });
-
-                breakdownHtml += `
-                    <div class="col-12 col-sm-2.4 flex-fill mb-2">
-                        <div class="p-3 bg-light rounded-4 border border-white text-center">
-                            <div class="fs-4 mb-1">${pIcons[idx]}</div>
-                            <h6 class="fw-bold small mb-2">${pNames[idx]}</h6>
-                            <div class="d-flex flex-column gap-1 text-center" style="font-size: 0.75rem;">
-                                <span class="text-success fw-bold">${jam} Jam</span>
-                                <span class="text-warning fw-bold text-dark">${ind} Ind</span>
-                                <span class="text-danger fw-bold">${miss} Mis</span>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            });
-            document.getElementById('prayerBreakdownContainer').innerHTML = breakdownHtml;
-
-            // Generate Chart trend last 30 days
-            const chartData = [...allRecords].reverse().slice(-30);
-            const labels = chartData.map(r => {
-                const parts = r.date.split('-');
-                return `${parts[1]}/${parts[2]}`; // MM/DD
-            });
-            const scores = chartData.map(r => Number(r.totalScore) || 0);
-
-            const ctx = document.getElementById('parentTrendChart').getContext('2d');
-            if (chartInstance) {
-                chartInstance.destroy();
+            switch (filterType) {
+                case 'this-week':
+                    const dayOfWeek = today.getDay();
+                    startDate.setDate(today.getDate() - dayOfWeek);
+                    endDate.setDate(startDate.getDate() + 6);
+                    break;
+                case 'last-7-days':
+                    startDate.setDate(today.getDate() - 6);
+                    break;
+                case 'this-month':
+                    startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+                    endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+                    break;
+                case 'last-30-days':
+                    startDate.setDate(today.getDate() - 29);
+                    break;
+                case 'last-3-months':
+                    startDate.setMonth(today.getMonth() - 3);
+                    startDate.setDate(1);
+                    break;
+                case 'last-6-months':
+                    startDate.setMonth(today.getMonth() - 6);
+                    startDate.setDate(1);
+                    break;
+                case 'this-year':
+                    startDate = new Date(today.getFullYear(), 0, 1);
+                    endDate = new Date(today.getFullYear(), 11, 31);
+                    break;
+                case 'last-12-months':
+                    startDate.setMonth(today.getMonth() - 12);
+                    break;
+                case 'custom':
+                    if (customStart && customEnd) {
+                        return { start: customStart, end: customEnd };
+                    }
+                    break;
             }
 
-            chartInstance = new Chart(ctx, {
-                type: 'line',
+            return { start: formatDate(startDate), end: formatDate(endDate) };
+        }
+
+        function getDaysInFilteredRange(start, end) {
+            const startDate = new Date(start);
+            let endDate = new Date(end);
+            const today = new Date();
+            
+            if (endDate > today) {
+                endDate = today;
+            }
+            
+            const diffTime = Math.max(0, endDate - startDate);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+            return diffDays;
+        }
+
+        function getStartOfWeek(dateStr) {
+            const d = new Date(dateStr);
+            const day = d.getDay();
+            d.setDate(d.getDate() - day);
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const dayOfMonth = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${dayOfMonth}`;
+        }
+
+        function renderReports() {
+            if (!allRecords) return;
+
+            const filterType = document.getElementById('reportFilterSelect').value;
+            let customStart = null;
+            let customEnd = null;
+
+            if (filterType === 'custom') {
+                customStart = document.getElementById('reportStartDate').value;
+                customEnd = document.getElementById('reportEndDate').value;
+                if (!customStart || !customEnd) {
+                    Swal.fire({
+                        title: 'Select Dates',
+                        text: 'Please select both start and end dates for the custom range.',
+                        icon: 'info',
+                        confirmButtonColor: '#155e4d',
+                        customClass: { popup: 'rounded-4' }
+                    });
+                    return;
+                }
+                if (customStart > customEnd) {
+                    Swal.fire({
+                        title: 'Invalid Range',
+                        text: 'Start date cannot be after end date.',
+                        icon: 'warning',
+                        confirmButtonColor: '#155e4d',
+                        customClass: { popup: 'rounded-4' }
+                    });
+                    return;
+                }
+            }
+
+            const range = getFilterDates(filterType, customStart, customEnd);
+            document.getElementById('resolvedRangeDisplay').innerText = `${range.start} to ${range.end}`;
+
+            const recordsInRange = allRecords.filter(r => r.date >= range.start && r.date <= range.end);
+            
+            const reportsWrapper = document.getElementById('reportsAnalyticsWrapper');
+            const emptyState = document.getElementById('reportsEmptyState');
+
+            if (recordsInRange.length === 0) {
+                reportsWrapper.classList.add('d-none');
+                emptyState.classList.remove('d-none');
+                document.getElementById('reportsEmptyStateText').innerText = `There are no tracker submissions logged for the period ${range.start} to ${range.end}.`;
+                return;
+            }
+
+            reportsWrapper.classList.remove('d-none');
+            emptyState.classList.add('d-none');
+
+            // Destroy previous charts to prevent overlays/memory leaks
+            Object.keys(chartInstances).forEach(key => {
+                if (chartInstances[key]) {
+                    chartInstances[key].destroy();
+                    chartInstances[key] = null;
+                }
+            });
+
+            // Calculate Summary Metrics
+            const totalDaysInPeriod = getDaysInFilteredRange(range.start, range.end);
+            const submissionRate = Math.min(100, Math.round((recordsInRange.length / totalDaysInPeriod) * 100));
+            document.getElementById('reportSubmissionRate').innerText = `${submissionRate}%`;
+            document.getElementById('reportSubmissionCount').innerText = `${recordsInRange.length} / ${totalDaysInPeriod} Days`;
+
+            let sumTotalScore = 0;
+            let sumSalawat = 0;
+            let completedPrayers = 0;
+            
+            let overallJamaat = 0;
+            let overallIndividual = 0;
+            let overallQaza = 0;
+            let overallMissed = 0;
+
+            const prayerBreakdown = {
+                fajr: { Jamaat: 0, Individual: 0, Qaza: 0, Missed: 0 },
+                dhuhr: { Jamaat: 0, Individual: 0, Qaza: 0, Missed: 0 },
+                asr: { Jamaat: 0, Individual: 0, Qaza: 0, Missed: 0 },
+                maghrib: { Jamaat: 0, Individual: 0, Qaza: 0, Missed: 0 },
+                isha: { Jamaat: 0, Individual: 0, Qaza: 0, Missed: 0 }
+            };
+
+            recordsInRange.forEach(r => {
+                sumTotalScore += Number(r.totalScore) || 0;
+                sumSalawat += Number(r.salawatCount) || 0;
+
+                const prayers = r.prayers || {};
+                ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'].forEach(p => {
+                    const status = prayers[p] || 'Missed';
+                    if (status === 'Jamaat') {
+                        overallJamaat++;
+                        completedPrayers++;
+                        prayerBreakdown[p].Jamaat++;
+                    } else if (status === 'Individual') {
+                        overallIndividual++;
+                        completedPrayers++;
+                        prayerBreakdown[p].Individual++;
+                    } else if (status === 'Qaza') {
+                        overallQaza++;
+                        completedPrayers++;
+                        prayerBreakdown[p].Qaza++;
+                    } else {
+                        overallMissed++;
+                        prayerBreakdown[p].Missed++;
+                    }
+                });
+            });
+
+            const avgScore = (sumTotalScore / recordsInRange.length).toFixed(1);
+            document.getElementById('reportAvgScore').innerText = avgScore;
+            document.getElementById('reportTotalPoints').innerText = `${parseFloat(sumTotalScore.toFixed(1))} Total Pts`;
+
+            const totalPossiblePrayers = recordsInRange.length * 5;
+            const completionRate = totalPossiblePrayers > 0 ? Math.round((completedPrayers / totalPossiblePrayers) * 100) : 0;
+            document.getElementById('reportCompletionRate').innerText = `${completionRate}%`;
+            document.getElementById('reportPrayerCount').innerText = `${completedPrayers} / ${totalPossiblePrayers} Prayers`;
+
+            document.getElementById('reportSalawatCount').innerText = sumSalawat;
+
+            // Update Circular Progress SVG
+            const progressPath = document.getElementById('circularProgressPath');
+            const progressText = document.getElementById('circularProgressText');
+            if (progressPath && progressText) {
+                const offset = 326.7 - (326.7 * completionRate) / 100;
+                progressPath.style.strokeDashoffset = offset;
+                progressText.textContent = `${completionRate}%`;
+            }
+
+            // Chart 1: Prayer Status Share Chart (Doughnut)
+            const statusCtx = document.getElementById('prayerStatusChart').getContext('2d');
+            chartInstances.prayerStatus = new Chart(statusCtx, {
+                type: 'doughnut',
                 data: {
-                    labels: labels,
+                    labels: ['Jamaat', 'Individual', 'Qaza', 'Missed'],
                     datasets: [{
-                        label: 'Points Earned',
-                        data: scores,
-                        borderColor: '#198754',
-                        backgroundColor: 'rgba(25, 135, 84, 0.08)',
-                        borderWidth: 3,
-                        tension: 0.35,
-                        fill: true,
-                        pointBackgroundColor: '#198754',
-                        pointRadius: 4
+                        data: [overallJamaat, overallIndividual, overallQaza, overallMissed],
+                        backgroundColor: ['#10b981', '#3b82f6', '#06b6d4', '#ef4444'],
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: { precision: 0 }
+                        legend: { position: 'bottom', labels: { boxWidth: 12, font: { weight: 'bold', size: 10 } } }
+                    }
+                }
+            });
+
+            // Chart 2: Prayer Comparison Chart (Grouped Bar)
+            const compCtx = document.getElementById('prayerComparisonChart').getContext('2d');
+            const prayersList = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+            const prayerLabels = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+            
+            chartInstances.prayerComparison = new Chart(compCtx, {
+                type: 'bar',
+                data: {
+                    labels: prayerLabels,
+                    datasets: [
+                        {
+                            label: 'Jamaat',
+                            data: prayersList.map(p => prayerBreakdown[p].Jamaat),
+                            backgroundColor: '#10b981'
                         },
-                        x: {
-                            grid: { display: false }
+                        {
+                            label: 'Individual',
+                            data: prayersList.map(p => prayerBreakdown[p].Individual),
+                            backgroundColor: '#3b82f6'
+                        },
+                        {
+                            label: 'Qaza',
+                            data: prayersList.map(p => prayerBreakdown[p].Qaza),
+                            backgroundColor: '#06b6d4'
+                        },
+                        {
+                            label: 'Missed',
+                            data: prayersList.map(p => prayerBreakdown[p].Missed),
+                            backgroundColor: '#ef4444'
                         }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { stacked: true },
+                        y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } }
+                    },
+                    plugins: {
+                        legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 9 } } }
+                    }
+                }
+            });
+
+            // Chart 3: Daily Consistency Chart (Line)
+            const chronologicalRecords = [...recordsInRange].reverse();
+            const dailyLabels = chronologicalRecords.map(r => {
+                const parts = r.date.split('-');
+                return `${parts[1]}/${parts[2]}`; // MM/DD
+            });
+            const dailyScores = chronologicalRecords.map(r => Number(r.totalScore) || 0);
+
+            const dailyCtx = document.getElementById('dailyConsistencyChart').getContext('2d');
+            chartInstances.dailyConsistency = new Chart(dailyCtx, {
+                type: 'line',
+                data: {
+                    labels: dailyLabels,
+                    datasets: [{
+                        label: 'Daily Score',
+                        data: dailyScores,
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.05)',
+                        borderWidth: 2,
+                        tension: 0.3,
+                        fill: true,
+                        pointBackgroundColor: '#10b981',
+                        pointRadius: dailyLabels.length > 30 ? 0 : 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true },
+                        x: { grid: { display: false }, ticks: { font: { size: 9 } } }
+                    }
+                }
+            });
+
+            // Chart 4: Weekly Comparison Chart (Bar)
+            const weeklyGroups = {};
+            chronologicalRecords.forEach(r => {
+                const wStart = getStartOfWeek(r.date);
+                if (!weeklyGroups[wStart]) weeklyGroups[wStart] = { total: 0, count: 0 };
+                weeklyGroups[wStart].total += Number(r.totalScore) || 0;
+                weeklyGroups[wStart].count++;
+            });
+            
+            const weeklyLabels = Object.keys(weeklyGroups).map(wc => {
+                const parts = wc.split('-');
+                return `W/C ${parts[1]}/${parts[2]}`;
+            });
+            const weeklyScores = Object.values(weeklyGroups).map(g => parseFloat((g.total / g.count).toFixed(1)));
+
+            const weeklyCtx = document.getElementById('weeklyComparisonChart').getContext('2d');
+            chartInstances.weeklyComparison = new Chart(weeklyCtx, {
+                type: 'bar',
+                data: {
+                    labels: weeklyLabels,
+                    datasets: [{
+                        label: 'Avg Weekly Score',
+                        data: weeklyScores,
+                        backgroundColor: '#3b82f6',
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true },
+                        x: { grid: { display: false }, ticks: { font: { size: 9 } } }
+                    }
+                }
+            });
+
+            // Chart 5: Monthly Progress Trend (Line)
+            const monthlyGroups = {};
+            chronologicalRecords.forEach(r => {
+                const parts = r.date.split('-');
+                const monthKey = `${parts[0]}-${parts[1]}`;
+                if (!monthlyGroups[monthKey]) monthlyGroups[monthKey] = { total: 0, count: 0 };
+                monthlyGroups[monthKey].total += Number(r.totalScore) || 0;
+                monthlyGroups[monthKey].count++;
+            });
+
+            const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            const monthlyLabels = Object.keys(monthlyGroups).map(mk => {
+                const parts = mk.split('-');
+                return `${monthNames[parseInt(parts[1]) - 1]} ${parts[0]}`;
+            });
+            const monthlyScores = Object.values(monthlyGroups).map(g => parseFloat((g.total / g.count).toFixed(1)));
+
+            const monthlyCtx = document.getElementById('monthlyTrendChart').getContext('2d');
+            chartInstances.monthlyTrend = new Chart(monthlyCtx, {
+                type: 'line',
+                data: {
+                    labels: monthlyLabels,
+                    datasets: [{
+                        label: 'Avg Monthly Score',
+                        data: monthlyScores,
+                        borderColor: '#06b6d4',
+                        backgroundColor: 'rgba(6, 182, 212, 0.05)',
+                        borderWidth: 3,
+                        tension: 0.35,
+                        fill: true,
+                        pointBackgroundColor: '#06b6d4',
+                        pointRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true },
+                        x: { grid: { display: false }, ticks: { font: { size: 9 } } }
+                    }
+                }
+            });
+
+            // Chart 6: Yearly Trend (Bar)
+            const yearlyGroups = {};
+            chronologicalRecords.forEach(r => {
+                const yearKey = r.date.split('-')[0];
+                if (!yearlyGroups[yearKey]) yearlyGroups[yearKey] = { total: 0, count: 0 };
+                yearlyGroups[yearKey].total += Number(r.totalScore) || 0;
+                yearlyGroups[yearKey].count++;
+            });
+
+            const yearlyLabels = Object.keys(yearlyGroups);
+            const yearlyScores = Object.values(yearlyGroups).map(g => parseFloat((g.total / g.count).toFixed(1)));
+
+            const yearlyCtx = document.getElementById('yearlyTrendChart').getContext('2d');
+            chartInstances.yearlyTrend = new Chart(yearlyCtx, {
+                type: 'bar',
+                data: {
+                    labels: yearlyLabels,
+                    datasets: [{
+                        label: 'Avg Yearly Score',
+                        data: yearlyScores,
+                        backgroundColor: '#f59e0b',
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true },
+                        x: { grid: { display: false } }
                     }
                 }
             });

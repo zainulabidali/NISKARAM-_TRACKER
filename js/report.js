@@ -20,8 +20,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (!madrasaId || !studentId) {
-        alert("Missing student or madrasa context. Returning to tracker.");
-        window.history.back();
+        Swal.fire({
+            title: 'Missing Context',
+            text: "Missing student or madrasa context. Returning to tracker.",
+            icon: 'error',
+            confirmButtonColor: '#155e4d',
+            confirmButtonText: 'OK',
+            customClass: { popup: 'rounded-4' }
+        }).then(() => {
+            window.history.back();
+        });
         return;
     }
 
@@ -185,11 +193,12 @@ function updatePrayers(records) {
     let html = "";
 
     pKeys.forEach((k, i) => {
-        let jam = 0, ind = 0, miss = 0;
+        let jam = 0, ind = 0, qaz = 0, miss = 0;
         records.forEach(r => {
-            const p = r.prayers?.[k];
+            const p = r.prayers?.[k] || r[k];
             if (p === "Jamaat") jam++;
             else if (p === "Individual") ind++;
+            else if (p === "Qaza") qaz++;
             else miss++; // Not Prayed or empty is counted as missed
         });
 
@@ -200,6 +209,7 @@ function updatePrayers(records) {
                 <div class="prayer-counts">
                     <span class="j-count">${jam} Jam</span>
                     <span class="i-count">${ind} Ind</span>
+                    <span class="q-count">${qaz} Qaz</span>
                     <span class="m-count">${miss} Mis</span>
                 </div>
             </div>
