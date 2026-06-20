@@ -263,17 +263,18 @@
 
             <div class="col-6 col-md-4">
                 <div class="card h-100 border-0 shadow-sm rounded-4 profile-hover-card" style="cursor: pointer;"
-                    onclick="openAdminModule('dbhealth')">
+                    onclick="openAdminModule('datamanagement')">
                     <div class="card-body text-center p-4">
-                        <div class="bg-danger text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-3 shadow-sm"
-                            style="width: 60px; height: 60px; background: linear-gradient(135deg, #10b981, #059669) !important;">
-                            <i class="bi bi-shield-fill-check fs-3"></i>
+                        <div class="bg-indigo text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-3 shadow-sm"
+                            style="width: 60px; height: 60px; background: linear-gradient(135deg, #6366f1, #4f46e5) !important;">
+                            <i class="bi bi-database-fill-gear fs-3"></i>
                         </div>
-                        <h6 class="fw-bold mb-1">Database Tools</h6>
-                        <small class="text-muted d-none d-md-block">Clean and migrate records</small>
+                        <h6 class="fw-bold mb-1">Data Management</h6>
+                        <small class="text-muted d-none d-md-block">Manage backups, resets & deletes</small>
                     </div>
                 </div>
             </div>
+
 
             <!-- Madrasa Link Widget -->
             <div class="col-12 mt-4">
@@ -801,40 +802,333 @@
                 </div>
             </div>
 
-            <!-- DATABASE HEALTH MODULE -->
-            <div class="admin-module-pane d-none" id="dbhealth">
+            <!-- DATA MANAGEMENT CENTER MODULE -->
+            <div class="admin-module-pane d-none" id="datamanagement">
                 <button class="btn btn-sm btn-light border text-muted shadow-sm fw-bold mb-3 px-3 py-2 rounded-pill"
                     onclick="closeAdminModule()">
                     <i class="bi bi-arrow-left me-1"></i> Back to Dashboard
                 </button>
-                <div class="card p-4 shadow-sm rounded-4 border-0">
-                    <h5 class="text-success fw-bold mb-3"><i class="bi bi-shield-fill-check me-2"></i>Database Tools & Health</h5>
-                    <p class="text-muted small mb-4">Maintain data integrity, clean orphan records, and run migrations.</p>
-                    
-                    <div class="row g-3">
-                        <!-- Purge Orphans -->
-                        <div class="col-12 col-md-6">
-                            <div class="border rounded-4 p-4 h-100 bg-white shadow-sm">
-                                <h6 class="fw-bold text-danger mb-2"><i class="bi bi-trash3-fill me-2"></i>Purge Orphan Records</h6>
-                                <p class="text-muted small">Scans all records and deletes any that point to students who no longer exist in the system.</p>
-                                <button id="btnScanOrphans" class="btn btn-outline-danger rounded-pill fw-bold px-4 mt-2">
-                                    <i class="bi bi-search me-1"></i>Scan Orphans
-                                </button>
-                                <div id="orphanScanResult" class="mt-3 small text-muted"></div>
-                            </div>
-                        </div>
+                <div class="card p-4 shadow-sm rounded-4 border-0 bg-white">
+                    <div class="d-flex align-items-center justify-content-between mb-3 border-bottom pb-3">
+                        <h4 class="text-indigo fw-bold mb-0" style="color: #4f46e5 !important;">
+                            <i class="bi bi-database-fill-gear me-2"></i>Data Management Center
+                        </h4>
+                        <span class="badge bg-indigo bg-opacity-10 text-indigo fw-bold px-3 py-2 rounded-pill" style="color: #4f46e5 !important; background-color: rgba(79, 70, 229, 0.1) !important;">System Console</span>
+                    </div>
+
+                    <!-- Sub-tabs Navigation -->
+                    <ul class="nav nav-tabs mb-4 border-bottom-0 overflow-x-auto flex-nowrap" id="dmTabs" role="tablist" style="scrollbar-width: none;">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active fw-bold border-0 px-3 py-2 rounded-3 me-2" id="dm-overview-tab" data-bs-toggle="tab" data-bs-target="#dm-overview" type="button" role="tab"><i class="bi bi-speedometer2 me-1"></i> Overview</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link fw-bold border-0 px-3 py-2 rounded-3 me-2" id="dm-students-tab" data-bs-toggle="tab" data-bs-target="#dm-students" type="button" role="tab"><i class="bi bi-people me-1"></i> Students</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link fw-bold border-0 px-3 py-2 rounded-3 me-2" id="dm-classes-tab" data-bs-toggle="tab" data-bs-target="#dm-classes" type="button" role="tab"><i class="bi bi-easel me-1"></i> Classes</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link fw-bold border-0 px-3 py-2 rounded-3 me-2" id="dm-subjects-tab" data-bs-toggle="tab" data-bs-target="#dm-subjects" type="button" role="tab"><i class="bi bi-journal-bookmark me-1"></i> Subjects</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link fw-bold border-0 px-3 py-2 rounded-3 me-2" id="dm-records-tab" data-bs-toggle="tab" data-bs-target="#dm-records" type="button" role="tab"><i class="bi bi-card-checklist me-1"></i> Records Reset</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link fw-bold border-0 px-3 py-2 rounded-3 me-2 position-relative" id="dm-recovery-tab" data-bs-toggle="tab" data-bs-target="#dm-recovery" type="button" role="tab">
+                                <i class="bi bi-arrow-counterclockwise me-1"></i> Recovery Center
+                                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none" id="activeBackupsBadge">0</span>
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link fw-bold border-0 px-3 py-2 rounded-3" id="dm-logs-tab" data-bs-toggle="tab" data-bs-target="#dm-logs" type="button" role="tab"><i class="bi bi-journal-text me-1"></i> Audit Logs</button>
+                        </li>
+                    </ul>
+
+                    <!-- Sub-tabs Content -->
+                    <div class="tab-content" id="dmTabsContent">
                         
-                        <!-- Historical Recalculation -->
-                        <div class="col-12 col-md-6">
-                            <div class="border rounded-4 p-4 h-100 bg-white shadow-sm">
-                                <h6 class="fw-bold text-primary mb-2"><i class="bi bi-arrow-repeat me-2"></i>Recalculate Historical Scores</h6>
-                                <p class="text-muted small">Update historical records' scores to match the new scoring system (Jamaat = 1.0, Individual = 0.5, Qaza = 0.5, Missed = 0.0).</p>
-                                <button id="btnRecalculateScores" class="btn btn-outline-primary rounded-pill fw-bold px-4 mt-2">
-                                    <i class="bi bi-calculator me-1"></i>Migrate Scores
-                                </button>
-                                <div id="recalcScanResult" class="mt-3 small text-muted"></div>
+                        <!-- OVERVIEW TAB -->
+                        <div class="tab-pane fade show active" id="dm-overview" role="tabpanel">
+                            <div class="row g-3 mb-4">
+                                <div class="col-6 col-md-4">
+                                    <div class="border rounded-4 p-3 bg-light text-center">
+                                        <h6 class="text-muted small fw-bold mb-1">Total Students</h6>
+                                        <h3 class="fw-bold mb-0 text-dark" id="dmMetricStudents">0</h3>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <div class="border rounded-4 p-3 bg-light text-center">
+                                        <h6 class="text-muted small fw-bold mb-1">Active Backups (24h)</h6>
+                                        <h3 class="fw-bold mb-0 text-primary" id="dmMetricBackups">0</h3>
+                                    </div>
+                                </div>
+                                <div class="col-12 col-md-4">
+                                    <div class="border rounded-4 p-3 bg-light text-center">
+                                        <h6 class="text-muted small fw-bold mb-1">Audit Logs</h6>
+                                        <h3 class="fw-bold mb-0 text-success" id="dmMetricLogs">0</h3>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="alert alert-danger border-0 rounded-4 p-3 mb-4 d-flex align-items-start gap-3">
+                                <i class="bi bi-exclamation-triangle-fill fs-4 mt-1"></i>
+                                <div>
+                                    <span class="d-block fw-bold fs-6 mb-1">Warning: Destructive Operations Console</span>
+                                    <span class="small opacity-75">All delete actions execute cascades in Cloud Firestore. To prevent data losses, backups are created automatically. Deleted items will be held in the Recovery Center for exactly 24 hours before permanent erasure.</span>
+                                </div>
+                            </div>
+
+                            <!-- Legacy Database Tools (Migrated here) -->
+                            <h5 class="fw-bold text-dark mb-3 border-bottom pb-2"><i class="bi bi-shield-fill-check text-success me-2"></i>Database Health & Integrity Tools</h5>
+                            <div class="row g-3">
+                                <div class="col-12 col-md-6">
+                                    <div class="border rounded-4 p-3 bg-white h-100 shadow-sm">
+                                        <h6 class="fw-bold text-danger mb-2"><i class="bi bi-trash3-fill me-1"></i>Scan & Purge Orphans</h6>
+                                        <p class="text-muted small mb-3">Checks for daily records matching deleted student IDs and wipes them from Firestore.</p>
+                                        <button id="btnScanOrphans" class="btn btn-sm btn-outline-danger rounded-pill fw-bold px-3">
+                                            <i class="bi bi-search me-1"></i>Scan Orphans
+                                        </button>
+                                        <div id="orphanScanResult" class="mt-2 small text-muted"></div>
+                                    </div>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <div class="border rounded-4 p-3 bg-white h-100 shadow-sm">
+                                        <h6 class="fw-bold text-primary mb-2"><i class="bi bi-arrow-repeat me-1"></i>Migrate Score Model</h6>
+                                        <p class="text-muted small mb-3">Syncs legacy scores in tracker records to match the current point allocations.</p>
+                                        <button id="btnRecalculateScores" class="btn btn-sm btn-outline-primary rounded-pill fw-bold px-3">
+                                            <i class="bi bi-calculator me-1"></i>Migrate Scores
+                                        </button>
+                                        <div id="recalcScanResult" class="mt-2 small text-muted"></div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
+
+                        <!-- STUDENTS MANAGEMENT TAB -->
+                        <div class="tab-pane fade" id="dm-students" role="tabpanel">
+                            <div class="row g-3 align-items-end mb-3">
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label text-muted small fw-bold mb-1">Filter by Class</label>
+                                    <select id="dmStudentClassFilter" class="form-select bg-light border-0 fw-bold rounded-3">
+                                        <option value="all">All Classes</option>
+                                    </select>
+                                </div>
+                                <div class="col-12 col-md-5">
+                                    <label class="form-label text-muted small fw-bold mb-1">Search Students</label>
+                                    <input type="text" id="dmStudentSearch" class="form-control bg-light border-0 fw-bold rounded-3" placeholder="Search by name or admission...">
+                                </div>
+                                <div class="col-12 col-md-3">
+                                    <button type="button" id="btnDmResetStudentFilters" class="btn btn-outline-secondary w-100 rounded-pill fw-bold btn-sm py-2">Reset Filters</button>
+                                </div>
+                            </div>
+
+                            <div class="table-responsive border rounded-3 mb-3" style="max-height: 300px; overflow-y: auto;">
+                                <table class="table table-hover align-middle mb-0" style="font-size: 0.85rem;">
+                                    <thead class="table-light text-muted position-sticky top-0 z-1">
+                                        <tr>
+                                            <th style="width: 40px;"><input type="checkbox" id="dmStudentSelectAll"></th>
+                                            <th>Student Name</th>
+                                            <th>Admission No</th>
+                                            <th>Class</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="dmStudentsTableBody">
+                                        <tr>
+                                            <td colspan="4" class="text-center py-4 text-muted">Loading students...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 p-3 bg-light rounded-4 border">
+                                <div class="fw-bold text-dark" id="dmStudentsSelectedCount">0 students selected</div>
+                                <div class="d-flex gap-2">
+                                    <button type="button" id="btnDmDeleteSelectedStudents" class="btn btn-danger btn-sm rounded-pill px-4 fw-bold shadow-sm" disabled>
+                                        <i class="bi bi-trash3-fill me-1"></i>Delete Selected
+                                    </button>
+                                    <button type="button" id="btnDmDeleteAllStudents" class="btn btn-outline-danger btn-sm rounded-pill px-4 fw-bold super-admin-only d-none">
+                                        <i class="bi bi-exclamation-octagon-fill me-1"></i>Delete All Students
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- CLASSES MANAGEMENT TAB -->
+                        <div class="tab-pane fade" id="dm-classes" role="tabpanel">
+                            <div class="table-responsive border rounded-3 mb-3" style="max-height: 300px; overflow-y: auto;">
+                                <table class="table table-hover align-middle mb-0" style="font-size: 0.85rem;">
+                                    <thead class="table-light text-muted position-sticky top-0 z-1">
+                                        <tr>
+                                            <th style="width: 40px;"><input type="checkbox" id="dmClassSelectAll"></th>
+                                            <th>Class Name</th>
+                                            <th>Students Count</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="dmClassesTableBody">
+                                        <tr>
+                                            <td colspan="3" class="text-center py-4 text-muted">Loading classes...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 p-3 bg-light rounded-4 border">
+                                <div class="fw-bold text-dark" id="dmClassesSelectedCount">0 classes selected</div>
+                                <div class="d-flex gap-2">
+                                    <button type="button" id="btnDmDeleteSelectedClasses" class="btn btn-danger btn-sm rounded-pill px-4 fw-bold shadow-sm super-admin-only d-none" disabled>
+                                        <i class="bi bi-trash3-fill me-1"></i>Delete Selected
+                                    </button>
+                                    <button type="button" id="btnDmDeleteAllClasses" class="btn btn-outline-danger btn-sm rounded-pill px-4 fw-bold super-admin-only d-none">
+                                        <i class="bi bi-exclamation-octagon-fill me-1"></i>Delete All Classes
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SUBJECTS MANAGEMENT TAB -->
+                        <div class="tab-pane fade" id="dm-subjects" role="tabpanel">
+                            <div class="row g-3 align-items-end mb-3">
+                                <div class="col-12 col-md-9">
+                                    <label class="form-label text-muted small fw-bold mb-1">Filter by Class</label>
+                                    <select id="dmSubjectClassFilter" class="form-select bg-light border-0 fw-bold rounded-3">
+                                        <option value="all">All Classes</option>
+                                    </select>
+                                </div>
+                                <div class="col-12 col-md-3">
+                                    <button type="button" id="btnDmResetSubjectFilters" class="btn btn-outline-secondary w-100 rounded-pill fw-bold btn-sm py-2">Reset Filter</button>
+                                </div>
+                            </div>
+
+                            <div class="table-responsive border rounded-3 mb-3" style="max-height: 300px; overflow-y: auto;">
+                                <table class="table table-hover align-middle mb-0" style="font-size: 0.85rem;">
+                                    <thead class="table-light text-muted position-sticky top-0 z-1">
+                                        <tr>
+                                            <th style="width: 40px;"><input type="checkbox" id="dmSubjectSelectAll"></th>
+                                            <th>Subject Name</th>
+                                            <th>Class</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="dmSubjectsTableBody">
+                                        <tr>
+                                            <td colspan="3" class="text-center py-4 text-muted">Loading subjects...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 p-3 bg-light rounded-4 border">
+                                <div class="fw-bold text-dark" id="dmSubjectsSelectedCount">0 subjects selected</div>
+                                <div class="d-flex gap-2">
+                                    <button type="button" id="btnDmDeleteSelectedSubjects" class="btn btn-danger btn-sm rounded-pill px-4 fw-bold shadow-sm" disabled>
+                                        <i class="bi bi-trash3-fill me-1"></i>Delete Selected
+                                    </button>
+                                    <button type="button" id="btnDmDeleteAllSubjects" class="btn btn-outline-danger btn-sm rounded-pill px-4 fw-bold super-admin-only d-none">
+                                        <i class="bi bi-exclamation-octagon-fill me-1"></i>Delete All Subjects
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- RECORDS RESET TAB -->
+                        <div class="tab-pane fade" id="dm-records" role="tabpanel">
+                            <div class="row g-3 align-items-end mb-4">
+                                <div class="col-12 col-md-3">
+                                    <label class="form-label text-muted small fw-bold mb-1">Class Filter</label>
+                                    <select id="dmRecordsClassFilter" class="form-select bg-light border-0 fw-bold rounded-3">
+                                        <option value="all">All Classes</option>
+                                    </select>
+                                </div>
+                                <div class="col-12 col-md-3">
+                                    <label class="form-label text-muted small fw-bold mb-1">Student Filter (Optional)</label>
+                                    <select id="dmRecordsStudentFilter" class="form-select bg-light border-0 fw-bold rounded-3">
+                                        <option value="all">All Students</option>
+                                    </select>
+                                </div>
+                                <div class="col-12 col-md-3">
+                                    <label class="form-label text-muted small fw-bold mb-1">Start Date</label>
+                                    <input type="date" id="dmRecordsStartDate" class="form-control bg-light border-0 fw-bold rounded-3">
+                                </div>
+                                <div class="col-12 col-md-3">
+                                    <label class="form-label text-muted small fw-bold mb-1">End Date</label>
+                                    <input type="date" id="dmRecordsEndDate" class="form-control bg-light border-0 fw-bold rounded-3">
+                                </div>
+                            </div>
+
+                            <div class="p-4 rounded-4 bg-light text-center border">
+                                <i class="bi bi-calendar-x-fill text-danger fs-1 mb-2 d-block"></i>
+                                <h6 class="fw-bold mb-1">Filtered Record Purge</h6>
+                                <p class="text-muted small mb-4">Wipes student daily prayer tracking logs based on selection. Student accounts and classes are unaffected.</p>
+                                <div class="d-flex justify-content-center gap-2">
+                                    <button type="button" id="btnDmResetFilteredRecords" class="btn btn-danger btn-sm rounded-pill px-4 fw-bold shadow-sm">
+                                        <i class="bi bi-trash-fill me-1"></i>Delete Filtered Records
+                                    </button>
+                                    <button type="button" id="btnDmDeleteAllRecords" class="btn btn-outline-danger btn-sm rounded-pill px-4 fw-bold super-admin-only d-none">
+                                        <i class="bi bi-exclamation-octagon-fill me-1"></i>Delete All Records
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- RECOVERY CENTER TAB -->
+                        <div class="tab-pane fade" id="dm-recovery" role="tabpanel">
+                            <div class="table-responsive border rounded-3 mb-0" style="max-height: 350px; overflow-y: auto;">
+                                <table class="table table-hover align-middle mb-0" style="font-size: 0.82rem;">
+                                    <thead class="table-light text-muted position-sticky top-0 z-1">
+                                        <tr>
+                                            <th>Type</th>
+                                            <th>Created At</th>
+                                            <th>Expires In</th>
+                                            <th class="text-end">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="dmRecoveryTableBody">
+                                        <tr>
+                                            <td colspan="4" class="text-center py-4 text-muted">No backups found. Backups will appear when deleting files.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- AUDIT LOGS TAB -->
+                        <div class="tab-pane fade" id="dm-logs" role="tabpanel">
+                            <div class="row g-2 align-items-center mb-3">
+                                <div class="col-auto">
+                                    <span class="small fw-bold text-muted"><i class="bi bi-funnel-fill me-1"></i>Filter Actions:</span>
+                                </div>
+                                <div class="col-auto">
+                                    <select id="dmLogsActionFilter" class="form-select form-select-sm bg-light border-0 fw-bold rounded-pill px-3" style="width: auto; min-width: 150px;">
+                                        <option value="all">All Actions</option>
+                                        <option value="Student Delete">Student Delete</option>
+                                        <option value="Class Delete">Class Delete</option>
+                                        <option value="Subject Delete">Subject Delete</option>
+                                        <option value="Record Reset">Record Reset</option>
+                                        <option value="Backup Creation">Backup Creation</option>
+                                        <option value="Backup Restore">Backup Restore</option>
+                                        <option value="Permanent Delete">Permanent Delete</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="table-responsive border rounded-3" style="max-height: 300px; overflow-y: auto;">
+                                <table class="table table-hover align-middle mb-0" style="font-size: 0.8rem;">
+                                    <thead class="table-light text-muted position-sticky top-0 z-1">
+                                        <tr>
+                                            <th>Action</th>
+                                            <th>Actor (Role)</th>
+                                            <th>Details</th>
+                                            <th>Timestamp</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="dmLogsTableBody">
+                                        <tr>
+                                            <td colspan="4" class="text-center py-4 text-muted">No logs recorded yet.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
             </div>

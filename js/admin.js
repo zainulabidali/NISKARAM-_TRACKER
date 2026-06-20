@@ -3,6 +3,7 @@ import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/
 import { collection, query, where, getDocs, addDoc, deleteDoc, doc, updateDoc, getDoc, writeBatch, setDoc } from 'https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js';
 
 let madrasaId = null;
+let isSuperAdmin = false;
 let classMap = {};
 let studentMap = {};
 let activeStudentClassId = null;
@@ -176,6 +177,23 @@ window.openAdminModule = (moduleId) => {
         document.getElementById('orphanScanResult').innerHTML = '';
         document.getElementById('recalcScanResult').innerHTML = '';
     }
+
+    if (moduleId === 'datamanagement') {
+        checkSuperAdminRole();
+        updateDmMetrics();
+        // Load active tab data
+        const activeTabEl = document.querySelector('#dmTabs .nav-link.active');
+        if (activeTabEl) {
+            const targetId = activeTabEl.getAttribute('data-bs-target');
+            if (targetId === '#dm-overview') updateDmMetrics();
+            else if (targetId === '#dm-students') loadDmStudents();
+            else if (targetId === '#dm-classes') loadDmClasses();
+            else if (targetId === '#dm-subjects') loadDmSubjects();
+            else if (targetId === '#dm-records') loadDmRecordsSetup();
+            else if (targetId === '#dm-recovery') loadRecoveryBackups();
+            else if (targetId === '#dm-logs') loadAuditLogsLedger();
+        }
+    }
 };
 
 window.closeAdminModule = () => {
@@ -198,6 +216,11 @@ async function init() {
     await loadAnnouncementsBanner();
     await migrateStudentsWithoutAdmissionNumbers();
     initRecordsRedesignListeners();
+
+    // Data Management Center init
+    await checkSuperAdminRole();
+    await runExpiredBackupsCleanup();
+    initDataManagementListeners();
 }
 
 async function migrateStudentsWithoutAdmissionNumbers() {
@@ -2443,4 +2466,1422 @@ window.initLeaderboard = initLeaderboard;
 window.fetchAndRenderLeaderboard = fetchAndRenderLeaderboard;
 window.scanAndPurgeOrphans = scanAndPurgeOrphans;
 window.migrateHistoricalScores = migrateHistoricalScores;
+
+
+// ============================================================================
+// DATA MANAGEMENT CENTER OPERATIONS & EVENT LISTENERS
+// ============================================================================
+
+// Clear local storage cache
+function clearLocalStorageCacheForClassStudents(studentId = null) {
+    if (studentId) {
+        localStorage.removeItem(`points_${studentId}`);
+        localStorage.removeItem(`salawat_${studentId}`);
+        localStorage.removeItem(`days_${studentId}`);
+        localStorage.removeItem(`streak_${studentId}`);
+        return;
+    }
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith('points_') || key.startsWith('salawat_') || key.startsWith('days_') || key.startsWith('streak_'))) {
+            localStorage.removeItem(key);
+        }
+    }
+}
+
+// Role check
+async function checkSuperAdminRole() {
+    isSuperAdmin = (auth.currentUser && auth.currentUser.uid === 'mt0k0d3UeAgcB8RTzq5k3M97UKa2');
+    console.log("Logged user role - Super Admin:", isSuperAdmin);
+    
+    const saElements = document.querySelectorAll('.super-admin-only');
+    saElements.forEach(el => {
+        if (isSuperAdmin) {
+            el.classList.remove('d-none');
+            el.disabled = false;
+        } else {
+            el.classList.add('d-none');
+            el.disabled = true;
+        }
+    });
+}
+
+// Audit logger
+async function writeAuditLog({ action, entityType, entityId, backupId = null, details }) {
+    if (!madrasaId || !auth.currentUser) return;
+    try {
+        const userRole = isSuperAdmin ? 'Super Admin' : 'Admin';
+        const logDoc = {
+            action,
+            entityType,
+            entityId,
+            userId: auth.currentUser.uid,
+            userRole,
+            backupId,
+            timestamp: new Date().toISOString(),
+            details,
+            madrasaId
+        };
+        const logRef = doc(collection(db, "audit_logs"));
+        await setDoc(logRef, logDoc);
+    } catch (e) {
+        console.error("Failed to write audit log:", e);
+    }
+}
+
+// Secure step-by-step confirmation wrapper
+async function executeSecureDelete({
+    title,
+    text,
+    backupType,
+    fetchDataToBackup,
+    performDelete,
+    onSuccess
+}) {
+    const warnResult = await Swal.fire({
+        title: title || 'Warning!',
+        text: text || 'This action may permanently delete data.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Proceed',
+        customClass: { popup: 'rounded-4' }
+    });
+    if (!warnResult.isConfirmed) return;
+
+    const confirmInput = await Swal.fire({
+        title: 'Confirm Deletion',
+        text: 'Type "DELETE" in all caps to continue:',
+        input: 'text',
+        inputPlaceholder: 'DELETE',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        confirmButtonText: 'Verify',
+        customClass: { popup: 'rounded-4' },
+        inputValidator: (value) => {
+            if (value !== 'DELETE') {
+                return 'You must type DELETE exactly to proceed!';
+            }
+        }
+    });
+    if (!confirmInput.isConfirmed) return;
+
+    const backupQuestion = await Swal.fire({
+        title: 'Create Backup?',
+        text: 'Do you want to create a backup snapshot before executing deletion?',
+        icon: 'question',
+        showCancelButton: true,
+        showDenyButton: true,
+        confirmButtonText: 'Yes, Backup First',
+        denyButtonText: 'No, Just Delete',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#10b981',
+        denyButtonColor: '#f59e0b',
+        customClass: { popup: 'rounded-4' }
+    });
+
+    if (backupQuestion.isDismissed) return;
+
+    let backupId = null;
+    if (backupQuestion.isConfirmed) {
+        try {
+            Swal.fire({
+                title: 'Creating Backup...',
+                text: 'Please wait...',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+
+            const dataToBackup = await fetchDataToBackup();
+            backupId = await createSystemBackup(backupType, dataToBackup);
+            
+            await Swal.fire({
+                title: 'Backed Up!',
+                text: '💾 Backup Created Successfully',
+                icon: 'success',
+                timer: 1500,
+                showConfirmButton: false,
+                customClass: { popup: 'rounded-4' }
+            });
+        } catch (err) {
+            await Swal.fire({
+                title: 'Backup Failed',
+                text: 'Could not create backup: ' + err.message + '. Aborting deletion.',
+                icon: 'error',
+                customClass: { popup: 'rounded-4' }
+            });
+            return;
+        }
+    }
+
+    const finalConfirm = await Swal.fire({
+        title: 'Final Confirmation',
+        text: 'Delete Now? This will execute the permanent delete.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        confirmButtonText: 'Yes, Delete Now',
+        customClass: { popup: 'rounded-4' }
+    });
+    if (!finalConfirm.isConfirmed) return;
+
+    try {
+        Swal.fire({
+            title: 'Deleting...',
+            text: 'Please wait while the operation completes.',
+            allowOutsideClick: false,
+            didOpen: () => { Swal.showLoading(); }
+        });
+
+        const deletedCount = await performDelete(backupId);
+        
+        await Swal.fire({
+            title: 'Deleted!',
+            text: '✅ Data Deleted Successfully',
+            icon: 'success',
+            timer: 2000,
+            showConfirmButton: false,
+            customClass: { popup: 'rounded-4' }
+        });
+
+        if (onSuccess) onSuccess(deletedCount);
+    } catch (err) {
+        await Swal.fire({
+            title: 'Operation Failed',
+            text: '❌ Operation Failed: ' + err.message,
+            icon: 'error',
+            customClass: { popup: 'rounded-4' }
+        });
+    }
+}
+
+// Backup actions
+async function createSystemBackup(backupType, data) {
+    const backupId = 'backup_' + Date.now();
+    const createdAt = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    
+    const backupDoc = {
+        backupId,
+        backupType,
+        madrasaId,
+        createdBy: auth.currentUser.uid,
+        createdAt,
+        expiresAt,
+        data: JSON.stringify(data)
+    };
+    
+    await setDoc(doc(db, "system_backups", backupId), backupDoc);
+    
+    await writeAuditLog({
+        action: 'Backup Creation',
+        entityType: 'backup',
+        entityId: backupId,
+        backupId: backupId,
+        details: `Created ${backupType}`
+    });
+    
+    return backupId;
+}
+
+// Restore a backup
+async function restoreSystemBackup(backupId) {
+    try {
+        const backupRef = doc(db, "system_backups", backupId);
+        const backupSnap = await getDoc(backupRef);
+        if (!backupSnap.exists()) {
+            throw new Error("Backup document not found or expired.");
+        }
+        
+        const backup = backupSnap.data();
+        const parsedData = JSON.parse(backup.data);
+        
+        Swal.fire({
+            title: 'Restoring...',
+            text: 'Restoring documents back to Firestore...',
+            allowOutsideClick: false,
+            didOpen: () => { Swal.showLoading(); }
+        });
+        
+        const type = backup.backupType;
+        let restoreCount = 0;
+        const chunk = 400;
+        
+        if (type === 'Student Backup' || type === 'Full System Backup') {
+            const students = parsedData.students || [];
+            const admLookups = parsedData.admission_numbers || [];
+            const records = parsedData.records || [];
+            
+            for (let i = 0; i < students.length; i += chunk) {
+                const batch = writeBatch(db);
+                students.slice(i, i + chunk).forEach(s => {
+                    batch.set(doc(db, "students", s.id), {
+                        name: s.name,
+                        admission_number: s.admission_number,
+                        classId: s.classId,
+                        madrasaId: s.madrasaId
+                    });
+                    restoreCount++;
+                });
+                await batch.commit();
+            }
+            
+            for (let i = 0; i < admLookups.length; i += chunk) {
+                const batch = writeBatch(db);
+                admLookups.slice(i, i + chunk).forEach(a => {
+                    batch.set(doc(db, "admission_numbers", a.id), {
+                        studentId: a.studentId,
+                        classId: a.classId,
+                        madrasaId: a.madrasaId
+                    });
+                    restoreCount++;
+                });
+                await batch.commit();
+            }
+            
+            for (let i = 0; i < records.length; i += chunk) {
+                const batch = writeBatch(db);
+                records.slice(i, i + chunk).forEach(r => {
+                    batch.set(doc(db, "records", r.id), {
+                        madrasaId: r.madrasaId,
+                        studentId: r.studentId,
+                        classId: r.classId,
+                        date: r.date,
+                        prayers: r.prayers || {},
+                        prayerScore: r.prayerScore,
+                        subjectScore: r.subjectScore,
+                        totalScore: r.totalScore,
+                        salawatCount: r.salawatCount || 0,
+                        subjects: r.subjects || [],
+                        books: r.books || [],
+                        timestamp: r.timestamp || new Date().toISOString()
+                    });
+                    restoreCount++;
+                });
+                await batch.commit();
+            }
+        }
+        
+        if (type === 'Class Backup' || type === 'Full System Backup') {
+            const classes = parsedData.classes || [];
+            const students = parsedData.students || [];
+            const admLookups = parsedData.admission_numbers || [];
+            const records = parsedData.records || [];
+            const subjects = parsedData.subjects || [];
+            
+            for (let i = 0; i < classes.length; i += chunk) {
+                const batch = writeBatch(db);
+                classes.slice(i, i + chunk).forEach(c => {
+                    batch.set(doc(db, "classes", c.id), {
+                        name: c.name,
+                        madrasaId: c.madrasaId
+                    });
+                    restoreCount++;
+                });
+                await batch.commit();
+            }
+            
+            for (let i = 0; i < subjects.length; i += chunk) {
+                const batch = writeBatch(db);
+                subjects.slice(i, i + chunk).forEach(sub => {
+                    batch.set(doc(db, "subjects", sub.id), {
+                        name: sub.name,
+                        classId: sub.classId,
+                        madrasaId: sub.madrasaId
+                    });
+                    restoreCount++;
+                });
+                await batch.commit();
+            }
+
+            for (let i = 0; i < students.length; i += chunk) {
+                const batch = writeBatch(db);
+                students.slice(i, i + chunk).forEach(s => {
+                    batch.set(doc(db, "students", s.id), {
+                        name: s.name,
+                        admission_number: s.admission_number,
+                        classId: s.classId,
+                        madrasaId: s.madrasaId
+                    });
+                    restoreCount++;
+                });
+                await batch.commit();
+            }
+            for (let i = 0; i < admLookups.length; i += chunk) {
+                const batch = writeBatch(db);
+                admLookups.slice(i, i + chunk).forEach(a => {
+                    batch.set(doc(db, "admission_numbers", a.id), {
+                        studentId: a.studentId,
+                        classId: a.classId,
+                        madrasaId: a.madrasaId
+                    });
+                    restoreCount++;
+                });
+                await batch.commit();
+            }
+            for (let i = 0; i < records.length; i += chunk) {
+                const batch = writeBatch(db);
+                records.slice(i, i + chunk).forEach(r => {
+                    batch.set(doc(db, "records", r.id), {
+                        madrasaId: r.madrasaId,
+                        studentId: r.studentId,
+                        classId: r.classId,
+                        date: r.date,
+                        prayers: r.prayers || {},
+                        prayerScore: r.prayerScore,
+                        subjectScore: r.subjectScore,
+                        totalScore: r.totalScore,
+                        salawatCount: r.salawatCount || 0,
+                        subjects: r.subjects || [],
+                        books: r.books || [],
+                        timestamp: r.timestamp || new Date().toISOString()
+                    });
+                    restoreCount++;
+                });
+                await batch.commit();
+            }
+        }
+        
+        if (type === 'Subject Backup') {
+            const subjects = parsedData.subjects || [];
+            const records = parsedData.records || [];
+            
+            for (let i = 0; i < subjects.length; i += chunk) {
+                const batch = writeBatch(db);
+                subjects.slice(i, i + chunk).forEach(sub => {
+                    batch.set(doc(db, "subjects", sub.id), {
+                        name: sub.name,
+                        classId: sub.classId,
+                        madrasaId: sub.madrasaId
+                    });
+                    restoreCount++;
+                });
+                await batch.commit();
+            }
+            
+            for (let i = 0; i < records.length; i += chunk) {
+                const batch = writeBatch(db);
+                records.slice(i, i + chunk).forEach(r => {
+                    batch.set(doc(db, "records", r.id), {
+                        madrasaId: r.madrasaId,
+                        studentId: r.studentId,
+                        classId: r.classId,
+                        date: r.date,
+                        prayers: r.prayers || {},
+                        prayerScore: r.prayerScore,
+                        subjectScore: r.subjectScore,
+                        totalScore: r.totalScore,
+                        salawatCount: r.salawatCount || 0,
+                        subjects: r.subjects || [],
+                        books: r.books || [],
+                        timestamp: r.timestamp || new Date().toISOString()
+                    });
+                    restoreCount++;
+                });
+                await batch.commit();
+            }
+        }
+        
+        if (type === 'Records Backup') {
+            const records = parsedData.records || [];
+            
+            for (let i = 0; i < records.length; i += chunk) {
+                const batch = writeBatch(db);
+                records.slice(i, i + chunk).forEach(r => {
+                    batch.set(doc(db, "records", r.id), {
+                        madrasaId: r.madrasaId,
+                        studentId: r.studentId,
+                        classId: r.classId,
+                        date: r.date,
+                        prayers: r.prayers || {},
+                        prayerScore: r.prayerScore,
+                        subjectScore: r.subjectScore,
+                        totalScore: r.totalScore,
+                        salawatCount: r.salawatCount || 0,
+                        subjects: r.subjects || [],
+                        books: r.books || [],
+                        timestamp: r.timestamp || new Date().toISOString()
+                    });
+                    restoreCount++;
+                });
+                await batch.commit();
+            }
+        }
+
+        await writeAuditLog({
+            action: 'Backup Restore',
+            entityType: 'backup',
+            entityId: backupId,
+            backupId: backupId,
+            details: `Restored ${type} snapshot (${restoreCount} documents)`
+        });
+        
+        clearLocalStorageCacheForClassStudents();
+        
+        await Swal.fire({
+            title: 'Restored!',
+            text: '♻ Data Restored Successfully',
+            icon: 'success',
+            timer: 2000,
+            showConfirmButton: false,
+            customClass: { popup: 'rounded-4' }
+        });
+        
+        loadClasses();
+        loadSubjects();
+        loadRecoveryBackups();
+        loadAuditLogsLedger();
+        updateDmMetrics();
+    } catch(err) {
+        Swal.fire('Restoration Failed', err.message, 'error');
+    }
+}
+
+// Download a backup as JSON
+function downloadSystemBackup(backupId, backupType, dataStr) {
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Backup_${backupType.replace(/\s+/g, '_')}_${backupId}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+}
+
+// Expiration checking cleanup
+async function runExpiredBackupsCleanup() {
+    if (!madrasaId) return;
+    try {
+        const nowStr = new Date().toISOString();
+        const q = query(collection(db, "system_backups"), where("madrasaId", "==", madrasaId), where("expiresAt", "<=", nowStr));
+        const snap = await getDocs(q);
+        
+        if (snap.empty) return;
+        
+        let deleteCount = 0;
+        const batch = writeBatch(db);
+        snap.forEach(d => {
+            batch.delete(d.ref);
+            deleteCount++;
+        });
+        await batch.commit();
+        console.log(`Cleaned up ${deleteCount} expired backups automatically.`);
+        
+        await writeAuditLog({
+            action: 'Permanent Delete',
+            entityType: 'backup',
+            entityId: 'multiple',
+            details: `Cleaned up ${deleteCount} expired backup files (24h window passed)`
+        });
+        
+        loadRecoveryBackups();
+        updateDmMetrics();
+    } catch (e) {
+        console.error("Failed during automated backups cleanup:", e);
+    }
+}
+
+// Metrics calculator
+async function updateDmMetrics() {
+    if (!madrasaId) return;
+    try {
+        const sSnap = await getDocs(query(collection(db, "students"), where("madrasaId", "==", madrasaId)));
+        document.getElementById('dmMetricStudents').innerText = sSnap.size;
+
+        const bSnap = await getDocs(query(collection(db, "system_backups"), where("madrasaId", "==", madrasaId)));
+        document.getElementById('dmMetricBackups').innerText = bSnap.size;
+        
+        const badge = document.getElementById('activeBackupsBadge');
+        if (badge) {
+            if (bSnap.size > 0) {
+                badge.innerText = bSnap.size;
+                badge.classList.remove('d-none');
+            } else {
+                badge.classList.add('d-none');
+            }
+        }
+
+        const lSnap = await getDocs(query(collection(db, "audit_logs"), where("madrasaId", "==", madrasaId)));
+        document.getElementById('dmMetricLogs').innerText = lSnap.size;
+    } catch(e) {
+        console.error("Failed updating metrics:", e);
+    }
+}
+
+// Local data gathering helpers
+async function gatherStudentBackupData(studentIds) {
+    const students = [];
+    const admission_numbers = [];
+    const records = [];
+    for (const sid of studentIds) {
+        const sDoc = await getDoc(doc(db, "students", sid));
+        if (sDoc.exists()) {
+            const sData = sDoc.data();
+            students.push({ id: sDoc.id, ...sData });
+            if (sData.admission_number) {
+                const aDoc = await getDoc(doc(db, "admission_numbers", sData.admission_number));
+                if (aDoc.exists()) {
+                    admission_numbers.push({ id: aDoc.id, ...aDoc.data() });
+                }
+            }
+            const recQ = query(collection(db, "records"), where("studentId", "==", sid));
+            const recSnap = await getDocs(recQ);
+            recSnap.forEach(d => {
+                records.push({ id: d.id, ...d.data() });
+            });
+        }
+    }
+    return { students, admission_numbers, records };
+}
+
+async function gatherClassBackupData(classIds) {
+    const classes = [];
+    const students = [];
+    const admission_numbers = [];
+    const records = [];
+    const subjects = [];
+    for (const cid of classIds) {
+        const cDoc = await getDoc(doc(db, "classes", cid));
+        if (cDoc.exists()) {
+            classes.push({ id: cDoc.id, ...cDoc.data() });
+            const subQ = query(collection(db, "subjects"), where("classId", "==", cid));
+            const subSnap = await getDocs(subQ);
+            subSnap.forEach(d => subjects.push({ id: d.id, ...d.data() }));
+            
+            const stuQ = query(collection(db, "students"), where("classId", "==", cid));
+            const stuSnap = await getDocs(stuQ);
+            for (const sDoc of stuSnap.docs) {
+                const sData = sDoc.data();
+                students.push({ id: sDoc.id, ...sData });
+                if (sData.admission_number) {
+                    const aDoc = await getDoc(doc(db, "admission_numbers", sData.admission_number));
+                    if (aDoc.exists()) {
+                        admission_numbers.push({ id: aDoc.id, ...aDoc.data() });
+                    }
+                }
+                const recQ = query(collection(db, "records"), where("studentId", "==", sDoc.id));
+                const recSnap = await getDocs(recQ);
+                recSnap.forEach(d => records.push({ id: d.id, ...d.data() }));
+            }
+        }
+    }
+    return { classes, students, admission_numbers, records, subjects };
+}
+
+async function gatherSubjectBackupData(subjectIds) {
+    const subjects = [];
+    const records = [];
+    for (const subId of subjectIds) {
+        const subDoc = await getDoc(doc(db, "subjects", subId));
+        if (subDoc.exists()) {
+            subjects.push({ id: subDoc.id, ...subDoc.data() });
+            const recQ = query(collection(db, "records"), where("madrasaId", "==", madrasaId));
+            const recSnap = await getDocs(recQ);
+            recSnap.forEach(d => {
+                const r = d.data();
+                if (r.subjects && r.subjects.includes(subId)) {
+                    records.push({ id: d.id, ...r });
+                }
+            });
+        }
+    }
+    return { subjects, records };
+}
+
+async function gatherRecordsBackupData(classId, studentId, startDate, endDate) {
+    const records = [];
+    let q = query(collection(db, "records"), where("madrasaId", "==", madrasaId));
+    if (classId !== 'all') {
+        q = query(collection(db, "records"), where("madrasaId", "==", madrasaId), where("classId", "==", classId));
+    }
+    if (studentId !== 'all') {
+        q = query(collection(db, "records"), where("madrasaId", "==", madrasaId), where("studentId", "==", studentId));
+    }
+    const snap = await getDocs(q);
+    snap.forEach(d => {
+        const r = d.data();
+        let match = true;
+        if (startDate && r.date < startDate) match = false;
+        if (endDate && r.date > endDate) match = false;
+        if (match) {
+            records.push({ id: d.id, ...r });
+        }
+    });
+    return { records };
+}
+
+// Local deletion executions
+async function performStudentDelete(studentIds, backupId) {
+    let deletedCount = 0;
+    for (const sid of studentIds) {
+        const sDoc = await getDoc(doc(db, "students", sid));
+        if (sDoc.exists()) {
+            const sData = sDoc.data();
+            if (sData.admission_number) {
+                try {
+                    await deleteDoc(doc(db, "admission_numbers", sData.admission_number));
+                    deletedCount++;
+                } catch(e) { console.error(e); }
+            }
+            const recQ = query(collection(db, "records"), where("studentId", "==", sid));
+            const recSnap = await getDocs(recQ);
+            if (!recSnap.empty) {
+                const recRefs = [];
+                recSnap.forEach(d => recRefs.push(d.ref));
+                const chunkLimit = 400;
+                for (let i = 0; i < recRefs.length; i += chunkLimit) {
+                    const chunk = recRefs.slice(i, i + chunkLimit);
+                    const batch = writeBatch(db);
+                    chunk.forEach(ref => {
+                        batch.delete(ref);
+                        deletedCount++;
+                    });
+                    await batch.commit();
+                }
+            }
+            await deleteDoc(doc(db, "students", sid));
+            deletedCount++;
+            clearLocalStorageCacheForClassStudents(sid);
+        }
+    }
+    
+    await writeAuditLog({
+        action: 'Student Delete',
+        entityType: 'student',
+        entityId: studentIds.length === 1 ? studentIds[0] : 'multiple',
+        backupId,
+        details: `Deleted ${studentIds.length} students (Cascade deleted matching admission lookups and daily logs)`
+    });
+    return deletedCount;
+}
+
+async function performClassDelete(classIds, backupId) {
+    let deletedCount = 0;
+    for (const cid of classIds) {
+        const stuQ = query(collection(db, "students"), where("classId", "==", cid));
+        const stuSnap = await getDocs(stuQ);
+        const sids = stuSnap.docs.map(d => d.id);
+        
+        if (sids.length > 0) {
+            deletedCount += await performStudentDelete(sids, null);
+        }
+        
+        const subQ = query(collection(db, "subjects"), where("classId", "==", cid));
+        const subSnap = await getDocs(subQ);
+        if (!subSnap.empty) {
+            const batch = writeBatch(db);
+            subSnap.forEach(d => {
+                batch.delete(d.ref);
+                deletedCount++;
+            });
+            await batch.commit();
+        }
+        
+        await deleteDoc(doc(db, "classes", cid));
+        deletedCount++;
+    }
+    
+    await writeAuditLog({
+        action: 'Class Delete',
+        entityType: 'class',
+        entityId: classIds.length === 1 ? classIds[0] : 'multiple',
+        backupId,
+        details: `Deleted ${classIds.length} classes, cascading to class students, subjects, admission lookup tables, and history tracker logs.`
+    });
+    return deletedCount;
+}
+
+async function performSubjectDelete(subjectIds, backupId) {
+    let deletedCount = 0;
+    const chunkLimit = 400;
+    for (const subId of subjectIds) {
+        const recQ = query(collection(db, "records"), where("madrasaId", "==", madrasaId));
+        const recSnap = await getDocs(recQ);
+        
+        const updatesList = [];
+        recSnap.forEach(d => {
+            const r = d.data();
+            if (r.subjects && r.subjects.includes(subId)) {
+                const newSubs = r.subjects.filter(id => id !== subId);
+                const subDiff = r.subjects.length - newSubs.length;
+                const newSubScore = Math.max(0, (r.subjectScore || 0) - subDiff);
+                const newTotalScore = parseFloat(((r.prayerScore || 0) + newSubScore).toFixed(1));
+                
+                updatesList.push({
+                    ref: d.ref,
+                    payload: {
+                        subjects: newSubs,
+                        subjectScore: newSubScore,
+                        totalScore: newTotalScore
+                    }
+                });
+            }
+        });
+        
+        for (let i = 0; i < updatesList.length; i += chunkLimit) {
+            const chunk = updatesList.slice(i, i + chunkLimit);
+            const batch = writeBatch(db);
+            chunk.forEach(item => {
+                batch.update(item.ref, item.payload);
+                deletedCount++;
+            });
+            await batch.commit();
+        }
+        
+        await deleteDoc(doc(db, "subjects", subId));
+        deletedCount++;
+    }
+    
+    await writeAuditLog({
+        action: 'Subject Delete',
+        entityType: 'subject',
+        entityId: subjectIds.length === 1 ? subjectIds[0] : 'multiple',
+        backupId,
+        details: `Deleted ${subjectIds.length} subjects (Recalculated daily studied scores in affected student daily records)`
+    });
+    return deletedCount;
+}
+
+async function performRecordsDelete(classId, studentId, startDate, endDate, backupId) {
+    let deletedCount = 0;
+    let q = query(collection(db, "records"), where("madrasaId", "==", madrasaId));
+    if (classId !== 'all') {
+        q = query(collection(db, "records"), where("madrasaId", "==", madrasaId), where("classId", "==", classId));
+    }
+    if (studentId !== 'all') {
+        q = query(collection(db, "records"), where("madrasaId", "==", madrasaId), where("studentId", "==", studentId));
+    }
+    
+    const snap = await getDocs(q);
+    const recordsToDelete = [];
+    
+    snap.forEach(d => {
+        const r = d.data();
+        let match = true;
+        if (startDate && r.date < startDate) match = false;
+        if (endDate && r.date > endDate) match = false;
+        if (match) {
+            recordsToDelete.push(d.ref);
+            clearLocalStorageCacheForClassStudents(r.studentId);
+        }
+    });
+    
+    const chunkLimit = 400;
+    for (let i = 0; i < recordsToDelete.length; i += chunkLimit) {
+        const chunk = recordsToDelete.slice(i, i + chunkLimit);
+        const batch = writeBatch(db);
+        chunk.forEach(ref => {
+            batch.delete(ref);
+            deletedCount++;
+        });
+        await batch.commit();
+    }
+    
+    await writeAuditLog({
+        action: 'Record Reset',
+        entityType: 'records',
+        entityId: studentId !== 'all' ? studentId : 'multiple',
+        backupId,
+        details: `Wiped ${recordsToDelete.length} daily tracker records (Filter Class: ${classId}, Student: ${studentId}, Period: ${startDate || 'any'} to ${endDate || 'any'})`
+    });
+    return deletedCount;
+}
+
+// UI Lists Fetch & Populate
+async function loadDmStudents() {
+    const tbody = document.getElementById('dmStudentsTableBody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center py-3"><span class="spinner-border spinner-border-sm me-2"></span>Loading students...</td></tr>';
+    
+    try {
+        const classFilter = document.getElementById('dmStudentClassFilter');
+        const queryVal = classFilter ? classFilter.value : 'all';
+        const searchInput = document.getElementById('dmStudentSearch');
+        const searchVal = searchInput ? searchInput.value.toLowerCase().trim() : '';
+
+        const classQ = query(collection(db, "classes"), where("madrasaId", "==", madrasaId));
+        const classSnap = await getDocs(classQ);
+        const lClassMap = {};
+        classSnap.forEach(d => lClassMap[d.id] = d.data().name);
+        
+        if (classFilter && classFilter.children.length <= 1) {
+            classFilter.innerHTML = '<option value="all">All Classes</option>';
+            Object.entries(lClassMap).sort((a,b)=>a[1].localeCompare(b[1])).forEach(([id, name]) => {
+                classFilter.innerHTML += `<option value="${id}">${name}</option>`;
+            });
+        }
+
+        let studentQ = query(collection(db, "students"), where("madrasaId", "==", madrasaId));
+        if (queryVal !== 'all') {
+            studentQ = query(collection(db, "students"), where("madrasaId", "==", madrasaId), where("classId", "==", queryVal));
+        }
+        
+        const snap = await getDocs(studentQ);
+        let stuList = [];
+        snap.forEach(d => stuList.push({ id: d.id, ...d.data() }));
+        
+        if (searchVal) {
+            stuList = stuList.filter(s => 
+                (s.name && s.name.toLowerCase().includes(searchVal)) || 
+                (s.admission_number && s.admission_number.toLowerCase().includes(searchVal))
+            );
+        }
+
+        stuList.sort((a,b) => a.name.localeCompare(b.name));
+
+        if (stuList.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-muted">No students matching criteria.</td></tr>';
+            document.getElementById('dmStudentSelectAll').checked = false;
+            updateStudentsSelectedCount();
+            return;
+        }
+
+        tbody.innerHTML = stuList.map(s => `
+            <tr>
+                <td><input type="checkbox" class="dm-student-checkbox" data-id="${s.id}"></td>
+                <td class="fw-bold">${s.name}</td>
+                <td>${s.admission_number || 'None'}</td>
+                <td><span class="badge bg-light text-dark">${lClassMap[s.classId] || 'Unknown Class'}</span></td>
+            </tr>
+        `).join('');
+
+        document.getElementById('dmStudentSelectAll').checked = false;
+        document.querySelectorAll('.dm-student-checkbox').forEach(cb => {
+            cb.addEventListener('change', updateStudentsSelectedCount);
+        });
+        updateStudentsSelectedCount();
+
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="4" class="text-danger text-center">Error: ${err.message}</td></tr>`;
+    }
+}
+
+function updateStudentsSelectedCount() {
+    const checked = document.querySelectorAll('.dm-student-checkbox:checked');
+    const deleteBtn = document.getElementById('btnDmDeleteSelectedStudents');
+    document.getElementById('dmStudentsSelectedCount').innerText = `${checked.length} student(s) selected`;
+    if (deleteBtn) {
+        deleteBtn.disabled = checked.length === 0;
+    }
+}
+
+async function loadDmClasses() {
+    const tbody = document.getElementById('dmClassesTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="3" class="text-center py-3"><span class="spinner-border spinner-border-sm me-2"></span>Loading classes...</td></tr>';
+    
+    try {
+        const cSnap = await getDocs(query(collection(db, "classes"), where("madrasaId", "==", madrasaId)));
+        let classList = [];
+        cSnap.forEach(d => classList.push({ id: d.id, ...d.data(), studentCount: 0 }));
+
+        const sSnap = await getDocs(query(collection(db, "students"), where("madrasaId", "==", madrasaId)));
+        sSnap.forEach(d => {
+            const s = d.data();
+            const matchingClass = classList.find(c => c.id === s.classId);
+            if (matchingClass) matchingClass.studentCount++;
+        });
+
+        classList.sort((a,b)=> a.name.localeCompare(b.name));
+
+        if (classList.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-muted">No classes found.</td></tr>';
+            document.getElementById('dmClassSelectAll').checked = false;
+            updateClassesSelectedCount();
+            return;
+        }
+
+        tbody.innerHTML = classList.map(c => `
+            <tr>
+                <td><input type="checkbox" class="dm-class-checkbox" data-id="${c.id}"></td>
+                <td class="fw-bold">${c.name}</td>
+                <td><span class="badge bg-success bg-opacity-10 text-success fw-bold">${c.studentCount} active students</span></td>
+            </tr>
+        `).join('');
+
+        document.getElementById('dmClassSelectAll').checked = false;
+        document.querySelectorAll('.dm-class-checkbox').forEach(cb => {
+            cb.addEventListener('change', updateClassesSelectedCount);
+        });
+        updateClassesSelectedCount();
+
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="3" class="text-danger text-center">Error: ${e.message}</td></tr>`;
+    }
+}
+
+function updateClassesSelectedCount() {
+    const checked = document.querySelectorAll('.dm-class-checkbox:checked');
+    const deleteBtn = document.getElementById('btnDmDeleteSelectedClasses');
+    document.getElementById('dmClassesSelectedCount').innerText = `${checked.length} class(es) selected`;
+    if (deleteBtn) {
+        deleteBtn.disabled = checked.length === 0;
+    }
+}
+
+async function loadDmSubjects() {
+    const tbody = document.getElementById('dmSubjectsTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="3" class="text-center py-3"><span class="spinner-border spinner-border-sm me-2"></span>Loading subjects...</td></tr>';
+    
+    try {
+        const filterEl = document.getElementById('dmSubjectClassFilter');
+        const activeFilter = filterEl ? filterEl.value : 'all';
+
+        const classQ = query(collection(db, "classes"), where("madrasaId", "==", madrasaId));
+        const classSnap = await getDocs(classQ);
+        const lClassMap = {};
+        classSnap.forEach(d => lClassMap[d.id] = d.data().name);
+
+        if (filterEl && filterEl.children.length <= 1) {
+            filterEl.innerHTML = '<option value="all">All Classes</option>';
+            Object.entries(lClassMap).sort((a,b)=>a[1].localeCompare(b[1])).forEach(([id, name]) => {
+                filterEl.innerHTML += `<option value="${id}">${name}</option>`;
+            });
+        }
+
+        let subQ = query(collection(db, "subjects"), where("madrasaId", "==", madrasaId));
+        if (activeFilter !== 'all') {
+            subQ = query(collection(db, "subjects"), where("madrasaId", "==", madrasaId), where("classId", "==", activeFilter));
+        }
+
+        const sSnap = await getDocs(subQ);
+        let subList = [];
+        sSnap.forEach(d => subList.push({ id: d.id, ...d.data() }));
+        subList.sort((a,b)=>a.name.localeCompare(b.name));
+
+        if (subList.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-muted">No subjects found.</td></tr>';
+            document.getElementById('dmSubjectSelectAll').checked = false;
+            updateSubjectsSelectedCount();
+            return;
+        }
+
+        tbody.innerHTML = subList.map(s => `
+            <tr>
+                <td><input type="checkbox" class="dm-subject-checkbox" data-id="${s.id}"></td>
+                <td class="fw-bold">${s.name}</td>
+                <td><span class="badge bg-light text-dark">${lClassMap[s.classId] || 'Unknown Class'}</span></td>
+            </tr>
+        `).join('');
+
+        document.getElementById('dmSubjectSelectAll').checked = false;
+        document.querySelectorAll('.dm-subject-checkbox').forEach(cb => {
+            cb.addEventListener('change', updateSubjectsSelectedCount);
+        });
+        updateSubjectsSelectedCount();
+
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="3" class="text-danger text-center">Error: ${e.message}</td></tr>`;
+    }
+}
+
+function updateSubjectsSelectedCount() {
+    const checked = document.querySelectorAll('.dm-subject-checkbox:checked');
+    const deleteBtn = document.getElementById('btnDmDeleteSelectedSubjects');
+    document.getElementById('dmSubjectsSelectedCount').innerText = `${checked.length} subject(s) selected`;
+    if (deleteBtn) {
+        deleteBtn.disabled = checked.length === 0;
+    }
+}
+
+async function loadDmRecordsSetup() {
+    const classFilter = document.getElementById('dmRecordsClassFilter');
+    const studentFilter = document.getElementById('dmRecordsStudentFilter');
+    if (!classFilter || !studentFilter) return;
+
+    try {
+        const cSnap = await getDocs(query(collection(db, "classes"), where("madrasaId", "==", madrasaId)));
+        classFilter.innerHTML = '<option value="all">All Classes</option>';
+        cSnap.forEach(d => {
+            classFilter.innerHTML += `<option value="${d.id}">${d.data().name}</option>`;
+        });
+
+        document.getElementById('dmRecordsStartDate').value = '';
+        document.getElementById('dmRecordsEndDate').value = '';
+
+        classFilter.onchange = async () => {
+            const cid = classFilter.value;
+            studentFilter.innerHTML = '<option value="all">All Students</option>';
+            
+            let q = query(collection(db, "students"), where("madrasaId", "==", madrasaId));
+            if (cid !== 'all') {
+                q = query(collection(db, "students"), where("madrasaId", "==", madrasaId), where("classId", "==", cid));
+            }
+            const sSnap = await getDocs(q);
+            let studentsList = [];
+            sSnap.forEach(d => studentsList.push({ id: d.id, ...d.data() }));
+            studentsList.sort((a,b) => a.name.localeCompare(b.name));
+
+            studentsList.forEach(s => {
+                studentFilter.innerHTML += `<option value="${s.id}">${s.name} (${s.admission_number || 'None'})</option>`;
+            });
+        };
+
+        classFilter.onchange();
+
+    } catch (e) {
+        console.error("Failed loading records settings UI:", e);
+    }
+}
+
+async function loadRecoveryBackups() {
+    const tbody = document.getElementById('dmRecoveryTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center py-3"><span class="spinner-border spinner-border-sm me-2"></span>Loading backups...</td></tr>';
+    
+    try {
+        const q = query(collection(db, "system_backups"), where("madrasaId", "==", madrasaId));
+        const snap = await getDocs(q);
+        
+        let backupsList = [];
+        snap.forEach(d => backupsList.push(d.data()));
+        backupsList.sort((a,b)=> new Date(b.createdAt) - new Date(a.createdAt));
+
+        if (backupsList.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-muted">No backups found. Snapshots will appear here on deletion.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = backupsList.map(b => {
+            const timeDiff = new Date(b.expiresAt) - new Date();
+            let relativeExpiry = "Expired";
+            if (timeDiff > 0) {
+                const hours = Math.floor(timeDiff / (1000 * 60 * 60));
+                const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
+                relativeExpiry = `${hours}h ${minutes}m remaining`;
+            }
+            
+            return `
+                <tr>
+                    <td class="fw-bold"><i class="bi bi-file-earmark-code text-indigo me-1"></i>${b.backupType}</td>
+                    <td>${new Date(b.createdAt).toLocaleString()}</td>
+                    <td><span class="badge ${timeDiff > 0 ? 'bg-success bg-opacity-10 text-success' : 'bg-danger bg-opacity-10 text-danger'} fw-bold">${relativeExpiry}</span></td>
+                    <td class="text-end">
+                        <button class="btn btn-sm btn-outline-success restore-bk-btn rounded-pill px-3 py-1 me-1" data-id="${b.backupId}"><i class="bi bi-arrow-counterclockwise me-1"></i>Restore</button>
+                        <button class="btn btn-sm btn-outline-primary download-bk-btn rounded-pill px-3 py-1 me-1" data-id="${b.backupId}" data-type="${b.backupType}" data-payload='${b.data.replace(/'/g, "&apos;")}'><i class="bi bi-download me-1"></i>Download</button>
+                        <button class="btn btn-sm btn-outline-danger delete-bk-btn rounded-pill px-3 py-1" data-id="${b.backupId}"><i class="bi bi-trash me-1"></i>Delete</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        document.querySelectorAll('.restore-bk-btn').forEach(btn => {
+            btn.onclick = () => restoreSystemBackup(btn.dataset.id);
+        });
+
+        document.querySelectorAll('.download-bk-btn').forEach(btn => {
+            btn.onclick = () => downloadSystemBackup(btn.dataset.id, btn.dataset.type, btn.dataset.payload);
+        });
+
+        document.querySelectorAll('.delete-bk-btn').forEach(btn => {
+            btn.onclick = async () => {
+                const result = await Swal.fire({
+                    title: 'Permanent Delete?',
+                    text: 'Do you want to permanently erase this backup from recovery storage? This cannot be undone!',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#ef4444',
+                    confirmButtonText: 'Permanently Erase',
+                    customClass: { popup: 'rounded-4' }
+                });
+                
+                if (result.isConfirmed) {
+                    try {
+                        await deleteDoc(doc(db, "system_backups", btn.dataset.id));
+                        await writeAuditLog({
+                            action: 'Permanent Delete',
+                            entityType: 'backup',
+                            entityId: btn.dataset.id,
+                            details: `Permanently deleted backup snapshot file ${btn.dataset.id}`
+                        });
+                        await Swal.fire({
+                            title: 'Erase Complete',
+                            text: 'Backup file permanently deleted.',
+                            icon: 'success',
+                            timer: 1500,
+                            showConfirmButton: false,
+                            customClass: { popup: 'rounded-4' }
+                        });
+                        loadRecoveryBackups();
+                        updateDmMetrics();
+                    } catch(err) {
+                        Swal.fire('Error', err.message, 'error');
+                    }
+                }
+            };
+        });
+
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="4" class="text-danger text-center">Error: ${e.message}</td></tr>`;
+    }
+}
+
+async function loadAuditLogsLedger() {
+    const tbody = document.getElementById('dmLogsTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center py-3"><span class="spinner-border spinner-border-sm me-2"></span>Loading audit ledger...</td></tr>';
+    
+    try {
+        const filterVal = document.getElementById('dmLogsActionFilter').value;
+        let q = query(collection(db, "audit_logs"), where("madrasaId", "==", madrasaId));
+        const snap = await getDocs(q);
+        
+        let logsList = [];
+        snap.forEach(d => logsList.push(d.data()));
+        
+        if (filterVal !== 'all') {
+            logsList = logsList.filter(l => l.action === filterVal);
+        }
+
+        logsList.sort((a,b)=> new Date(b.timestamp) - new Date(a.timestamp));
+
+        if (logsList.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-muted">No logs matching criteria.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = logsList.map(l => `
+            <tr class="profile-hover-card">
+                <td class="fw-bold"><span class="badge ${
+                    l.action.includes('Delete') ? 'bg-danger bg-opacity-10 text-danger' : 
+                    l.action.includes('Reset') ? 'bg-warning bg-opacity-10 text-warning' : 
+                    l.action.includes('Restore') ? 'bg-success bg-opacity-10 text-success' : 'bg-primary bg-opacity-10 text-primary'
+                } px-2 py-1">${l.action}</span></td>
+                <td><span class="fw-bold">${l.userId === auth.currentUser.uid ? 'You' : 'Teacher'}</span> <small class="text-muted">(${l.userRole})</small></td>
+                <td style="max-width: 300px; word-break: break-all;">${l.details}</td>
+                <td>${new Date(l.timestamp).toLocaleString()}</td>
+            </tr>
+        `).join('');
+
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="4" class="text-danger text-center">Error: ${e.message}</td></tr>`;
+    }
+}
+
+// Bind DMC Click Triggers & Inputs
+function initDataManagementListeners() {
+    document.getElementById('dmStudentSelectAll')?.addEventListener('change', (e) => {
+        const state = e.target.checked;
+        document.querySelectorAll('.dm-student-checkbox').forEach(cb => cb.checked = state);
+        updateStudentsSelectedCount();
+    });
+
+    document.getElementById('dmClassSelectAll')?.addEventListener('change', (e) => {
+        const state = e.target.checked;
+        document.querySelectorAll('.dm-class-checkbox').forEach(cb => cb.checked = state);
+        updateClassesSelectedCount();
+    });
+
+    document.getElementById('dmSubjectSelectAll')?.addEventListener('change', (e) => {
+        const state = e.target.checked;
+        document.querySelectorAll('.dm-subject-checkbox').forEach(cb => cb.checked = state);
+        updateSubjectsSelectedCount();
+    });
+
+    document.getElementById('btnDmResetStudentFilters')?.addEventListener('click', () => {
+        document.getElementById('dmStudentClassFilter').value = 'all';
+        document.getElementById('dmStudentSearch').value = '';
+        loadDmStudents();
+    });
+
+    document.getElementById('btnDmResetSubjectFilters')?.addEventListener('click', () => {
+        document.getElementById('dmSubjectClassFilter').value = 'all';
+        loadDmSubjects();
+    });
+
+    document.getElementById('dmStudentClassFilter')?.addEventListener('change', loadDmStudents);
+    document.getElementById('dmStudentSearch')?.addEventListener('input', loadDmStudents);
+    document.getElementById('dmSubjectClassFilter')?.addEventListener('change', loadDmSubjects);
+    document.getElementById('dmLogsActionFilter')?.addEventListener('change', loadAuditLogsLedger);
+
+    document.querySelectorAll('#dmTabs button[data-bs-toggle="tab"]').forEach(tab => {
+        tab.addEventListener('shown.bs.tab', (e) => {
+            const targetId = e.target.getAttribute('data-bs-target');
+            if (targetId === '#dm-students') loadDmStudents();
+            else if (targetId === '#dm-classes') loadDmClasses();
+            else if (targetId === '#dm-subjects') loadDmSubjects();
+            else if (targetId === '#dm-records') loadDmRecordsSetup();
+            else if (targetId === '#dm-recovery') loadRecoveryBackups();
+            else if (targetId === '#dm-logs') loadAuditLogsLedger();
+            else if (targetId === '#dm-overview') updateDmMetrics();
+        });
+    });
+
+    document.getElementById('btnDmDeleteSelectedStudents')?.addEventListener('click', () => {
+        const checked = document.querySelectorAll('.dm-student-checkbox:checked');
+        const sids = Array.from(checked).map(cb => cb.dataset.id);
+        
+        executeSecureDelete({
+            title: 'Delete Selected Students?',
+            text: `This will cascade delete ${sids.length} selected student profiles, their admission numbers, and daily prayer records!`,
+            backupType: 'Student Backup',
+            fetchDataToBackup: () => gatherStudentBackupData(sids),
+            performDelete: (backupId) => performStudentDelete(sids, backupId),
+            onSuccess: () => {
+                loadDmStudents();
+                updateDmMetrics();
+            }
+        });
+    });
+
+    document.getElementById('btnDmDeleteAllStudents')?.addEventListener('click', async () => {
+        if (!isSuperAdmin) return;
+        const sSnap = await getDocs(query(collection(db, "students"), where("madrasaId", "==", madrasaId)));
+        const sids = sSnap.docs.map(d => d.id);
+        
+        if (sids.length === 0) {
+            Swal.fire('Info', 'No students to delete.', 'info');
+            return;
+        }
+
+        executeSecureDelete({
+            title: '⚠️ DELETE ALL STUDENTS?',
+            text: `CRITICAL ACTION: This will permanently delete ALL ${sids.length} students, their admission numbers, and their records for this entire Madrasa!`,
+            backupType: 'Full System Backup',
+            fetchDataToBackup: () => gatherStudentBackupData(sids),
+            performDelete: (backupId) => performStudentDelete(sids, backupId),
+            onSuccess: () => {
+                loadDmStudents();
+                updateDmMetrics();
+            }
+        });
+    });
+
+    document.getElementById('btnDmDeleteSelectedClasses')?.addEventListener('click', () => {
+        if (!isSuperAdmin) return;
+        const checked = document.querySelectorAll('.dm-class-checkbox:checked');
+        const cids = Array.from(checked).map(cb => cb.dataset.id);
+        
+        executeSecureDelete({
+            title: 'Delete Selected Classes?',
+            text: `CRITICAL ACTION: This will delete ${cids.length} classes, all students inside them, their subjects, and daily prayer logs!`,
+            backupType: 'Class Backup',
+            fetchDataToBackup: () => gatherClassBackupData(cids),
+            performDelete: (backupId) => performClassDelete(cids, backupId),
+            onSuccess: () => {
+                loadDmClasses();
+                updateDmMetrics();
+            }
+        });
+    });
+
+    document.getElementById('btnDmDeleteAllClasses')?.addEventListener('click', async () => {
+        if (!isSuperAdmin) return;
+        const cSnap = await getDocs(query(collection(db, "classes"), where("madrasaId", "==", madrasaId)));
+        const cids = cSnap.docs.map(d => d.id);
+        
+        if (cids.length === 0) {
+            Swal.fire('Info', 'No classes to delete.', 'info');
+            return;
+        }
+
+        executeSecureDelete({
+            title: '⚠️ DELETE ALL CLASSES?',
+            text: `CRITICAL ACTION: This will completely delete ALL ${cids.length} classes, all students, all subjects, all records, and resets the entire Madrasa roster!`,
+            backupType: 'Full System Backup',
+            fetchDataToBackup: () => gatherClassBackupData(cids),
+            performDelete: (backupId) => performClassDelete(cids, backupId),
+            onSuccess: () => {
+                loadDmClasses();
+                updateDmMetrics();
+            }
+        });
+    });
+
+    document.getElementById('btnDmDeleteSelectedSubjects')?.addEventListener('click', () => {
+        const checked = document.querySelectorAll('.dm-subject-checkbox:checked');
+        const subIds = Array.from(checked).map(cb => cb.dataset.id);
+        
+        executeSecureDelete({
+            title: 'Delete Selected Subjects?',
+            text: `This will delete ${subIds.length} subjects and automatically recalculate studied daily scores in affected daily records.`,
+            backupType: 'Subject Backup',
+            fetchDataToBackup: () => gatherSubjectBackupData(subIds),
+            performDelete: (backupId) => performSubjectDelete(subIds, backupId),
+            onSuccess: () => {
+                loadDmSubjects();
+                updateDmMetrics();
+            }
+        });
+    });
+
+    document.getElementById('btnDmDeleteAllSubjects')?.addEventListener('click', async () => {
+        if (!isSuperAdmin) return;
+        const sSnap = await getDocs(query(collection(db, "subjects"), where("madrasaId", "==", madrasaId)));
+        const subIds = sSnap.docs.map(d => d.id);
+        
+        if (subIds.length === 0) {
+            Swal.fire('Info', 'No subjects to delete.', 'info');
+            return;
+        }
+
+        executeSecureDelete({
+            title: '⚠️ DELETE ALL SUBJECTS?',
+            text: `This will delete ALL ${subIds.length} subjects from the system and updates daily log subject scores to 0.`,
+            backupType: 'Subject Backup',
+            fetchDataToBackup: () => gatherSubjectBackupData(subIds),
+            performDelete: (backupId) => performSubjectDelete(subIds, backupId),
+            onSuccess: () => {
+                loadDmSubjects();
+                updateDmMetrics();
+            }
+        });
+    });
+
+    document.getElementById('btnDmResetFilteredRecords')?.addEventListener('click', () => {
+        const cid = document.getElementById('dmRecordsClassFilter').value;
+        const sid = document.getElementById('dmRecordsStudentFilter').value;
+        const sDate = document.getElementById('dmRecordsStartDate').value;
+        const eDate = document.getElementById('dmRecordsEndDate').value;
+
+        executeSecureDelete({
+            title: 'Reset Filtered Records?',
+            text: `This will permanently delete daily prayer logs matching: Class: ${cid}, Student: ${sid}, Date Range: ${sDate || 'any'} to ${eDate || 'any'}.`,
+            backupType: 'Records Backup',
+            fetchDataToBackup: () => gatherRecordsBackupData(cid, sid, sDate, eDate),
+            performDelete: (backupId) => performRecordsDelete(cid, sid, sDate, eDate, backupId),
+            onSuccess: () => {
+                updateDmMetrics();
+            }
+        });
+    });
+
+    document.getElementById('btnDmDeleteAllRecords')?.addEventListener('click', () => {
+        if (!isSuperAdmin) return;
+        executeSecureDelete({
+            title: '⚠️ RESET ALL TRACKING DATA?',
+            text: `CRITICAL ACTION: This will completely wipe ALL historical daily logs and prayer tracking records for this entire Madrasa. Student rosters and classes remain untouched.`,
+            backupType: 'Records Backup',
+            fetchDataToBackup: () => gatherRecordsBackupData('all', 'all', '', ''),
+            performDelete: (backupId) => performRecordsDelete('all', 'all', '', '', backupId),
+            onSuccess: () => {
+                updateDmMetrics();
+            }
+        });
+    });
+    
+    // Periodically sweep expired backups
+    setInterval(runExpiredBackupsCleanup, 60 * 60 * 1000);
+}
+
+// Expose DMC functions globally to help manual execution
+window.checkSuperAdminRole = checkSuperAdminRole;
+window.executeSecureDelete = executeSecureDelete;
+window.createSystemBackup = createSystemBackup;
+window.restoreSystemBackup = restoreSystemBackup;
+window.downloadSystemBackup = downloadSystemBackup;
+window.runExpiredBackupsCleanup = runExpiredBackupsCleanup;
+window.updateDmMetrics = updateDmMetrics;
+window.loadDmStudents = loadDmStudents;
+window.loadDmClasses = loadDmClasses;
+window.loadDmSubjects = loadDmSubjects;
+window.loadDmRecordsSetup = loadDmRecordsSetup;
+window.loadRecoveryBackups = loadRecoveryBackups;
+window.loadAuditLogsLedger = loadAuditLogsLedger;
+window.initDataManagementListeners = initDataManagementListeners;
+
 

@@ -105,5 +105,19 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isSuperAdmin();
     }
+
+    // SYSTEM BACKUPS
+    match /system_backups/{backupId} {
+      allow read, delete: if isLoggedIn() && (isSuperAdmin() || (resource != null && isAuthorizedForMadrasa(resource.data.madrasaId)));
+      allow create: if isLoggedIn() && (isSuperAdmin() || (request.resource != null && isAuthorizedForMadrasa(request.resource.data.madrasaId)));
+      allow update: if isLoggedIn() && (isSuperAdmin() || (resource != null && isAuthorizedForMadrasa(resource.data.madrasaId) && request.resource != null && isAuthorizedForMadrasa(request.resource.data.madrasaId)));
+    }
+
+    // AUDIT LOGS
+    match /audit_logs/{logId} {
+      allow read: if isLoggedIn() && (isSuperAdmin() || (resource != null && isAuthorizedForMadrasa(resource.data.madrasaId)));
+      allow create: if isLoggedIn() && (isSuperAdmin() || (request.resource != null && isAuthorizedForMadrasa(request.resource.data.madrasaId)));
+      allow update, delete: if isSuperAdmin();
+    }
   }
 }
