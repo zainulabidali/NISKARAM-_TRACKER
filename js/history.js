@@ -49,9 +49,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         // keep page usable if status check fails offline
     }
 
-    // Set default date to today based on local timezone
+    // Set default date to yesterday based on local timezone
     const offset = new Date().getTimezoneOffset() * 60000;
-    const localDate = new Date(Date.now() - offset).toISOString().split('T')[0];
+    const localDate = new Date(Date.now() - offset - 86400000).toISOString().split('T')[0];
     document.getElementById('dateFilter').value = localDate;
 
     await loadClasses();

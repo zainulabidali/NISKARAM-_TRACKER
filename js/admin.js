@@ -760,7 +760,7 @@ let activeRecordsClassName = null;
 let cachedClassStudents = [];
 let cachedClassRecords = [];
 let recordsState = {
-    dateFilterType: 'range', // 'today', 'yesterday', 'custom', 'range'
+    dateFilterType: 'yesterday', // 'today', 'yesterday', 'custom', 'range'
     singleDate: todayStr,
     startDate: getDateAgo(30),
     endDate: todayStr,
@@ -874,6 +874,26 @@ async function openClassRecords(classId, className) {
     document.getElementById('recordsFilterPrayerStatus').value = recordsState.prayerStatus;
     document.getElementById('recordsFilterSearch').value = recordsState.searchQuery;
     
+    // Update column visibility based on recordsState.dateFilterType
+    const singleCol = document.getElementById('filterSingleDateCol');
+    const startCol = document.getElementById('filterStartDateCol');
+    const endCol = document.getElementById('filterEndDateCol');
+    if (singleCol && startCol && endCol) {
+        if (recordsState.dateFilterType === 'custom') {
+            singleCol.classList.remove('d-none');
+            startCol.classList.add('d-none');
+            endCol.classList.add('d-none');
+        } else if (recordsState.dateFilterType === 'range') {
+            singleCol.classList.add('d-none');
+            startCol.classList.remove('d-none');
+            endCol.classList.remove('d-none');
+        } else {
+            singleCol.classList.add('d-none');
+            startCol.classList.add('d-none');
+            endCol.classList.add('d-none');
+        }
+    }
+    
     // Populate class in Report Center
     const reportClass = document.getElementById('pdfReportClass');
     if (reportClass) {
@@ -952,7 +972,38 @@ function refreshClassRecordsUI() {
     renderDashboardTable(sorted);
 }
 
+function isPrayerCompleted(val) {
+    if (val === undefined || val === null) return false;
+    if (typeof val === 'boolean') return val;
+    if (typeof val === 'number') return val > 0;
+    if (Array.isArray(val)) return val.length > 0;
+    if (typeof val === 'object') {
+        if (val.status !== undefined) return isPrayerCompleted(val.status);
+        if (val.value !== undefined) return isPrayerCompleted(val.value);
+        if (val.completed !== undefined) return isPrayerCompleted(val.completed);
+        return Object.keys(val).length > 0;
+    }
+    if (typeof val === 'string') {
+        const clean = val.trim().toLowerCase();
+        if (clean === 'jamaat' || clean === 'individual' || clean === 'qaza') return true;
+        if (clean === 'completed' || clean === 'yes' || clean === '1' || clean === 'true') return true;
+        return false;
+    }
+    return false;
+}
+
+function getRecordCompletedPrayersCount(r) {
+    if (!r) return 0;
+    const keys = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+    return keys.filter(k => {
+        const pCap = k.charAt(0).toUpperCase() + k.slice(1);
+        const val = r[k] || r.prayers?.[k] || r[pCap] || r.prayers?.[pCap];
+        return isPrayerCompleted(val);
+    }).length;
+}
+
 function getFilteredRecords() {
+    console.log(`[Debug Flow] Total records loaded: ${cachedClassRecords.length}`);
     let start = null;
     let end = null;
     
@@ -975,6 +1026,7 @@ function getFilteredRecords() {
         if (end && r.date > end) return false;
         return true;
     });
+    console.log(`[Debug Flow] Records after date filter: ${dateFilteredRecords.length}`);
     
     let result = [...dateFilteredRecords];
     
@@ -997,11 +1049,7 @@ function getFilteredRecords() {
     // Filter by Prayer Status
     if (recordsState.prayerStatus !== 'all') {
         result = result.filter(r => {
-            const keys = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
-            const completedCount = keys.filter(k => {
-                const val = r[k] || r.prayers?.[k];
-                return val === 'Jamaat' || val === 'Individual' || val === 'Qaza';
-            }).length;
+            const completedCount = getRecordCompletedPrayersCount(r);
             
             if (recordsState.prayerStatus === 'completed') {
                 return completedCount === 5;
@@ -1013,6 +1061,7 @@ function getFilteredRecords() {
             return true;
         });
     }
+    console.log(`[Debug Flow] Records after status filter: ${result.length}`);
     
     return { result, dateFilteredRecords };
 }
@@ -1033,9 +1082,8 @@ function getSortedRecords(records) {
             const admB = cachedClassStudents.find(s => s.id === b.studentId)?.admission_number || '';
             return admA.localeCompare(admB) * dir;
         } else if (key === 'completion') {
-            const keys = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
-            const compA = keys.filter(k => { const val = a[k] || a.prayers?.[k]; return val === 'Jamaat' || val === 'Individual' || val === 'Qaza'; }).length;
-            const compB = keys.filter(k => { const val = b[k] || b.prayers?.[k]; return val === 'Jamaat' || val === 'Individual' || val === 'Qaza'; }).length;
+            const compA = getRecordCompletedPrayersCount(a);
+            const compB = getRecordCompletedPrayersCount(b);
             return (compA - compB) * dir;
         }
         return 0;
@@ -1048,20 +1096,19 @@ function calculateClassMetrics(filteredStudents, filteredRecords, dateFilteredRe
     
     let totalCompleted = 0;
     let totalMissed = 0;
+    let totalCompletedPrayers = 0;
     
     dateFilteredRecords.forEach(r => {
-        const keys = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
-        keys.forEach(k => {
-            const val = r[k] || r.prayers?.[k];
-            if (val === 'Jamaat' || val === 'Individual' || val === 'Qaza') {
-                totalCompleted++;
-            } else {
-                totalMissed++;
-            }
-        });
+        const completedCount = getRecordCompletedPrayersCount(r);
+        if (completedCount === 5) {
+            totalCompleted++;
+        } else if (completedCount === 0) {
+            totalMissed++;
+        }
+        totalCompletedPrayers += completedCount;
     });
     
-    const avgCompletion = totalRecords > 0 ? Math.round((totalCompleted / (totalRecords * 5)) * 100) : 0;
+    const avgCompletion = totalRecords > 0 ? Math.round((totalCompletedPrayers / (totalRecords * 5)) * 100) : 0;
     
     let daysCount = 1;
     if (recordsState.dateFilterType === 'today' || recordsState.dateFilterType === 'yesterday') {
@@ -1087,6 +1134,7 @@ function calculateClassMetrics(filteredStudents, filteredRecords, dateFilteredRe
 }
 
 function renderDashboardTable(records) {
+    console.log(`[Debug Flow] Records rendered: ${records.length}`);
     const tbody = document.getElementById('recordsHistoryTableBody');
     if (!tbody) return;
     tbody.innerHTML = '';
@@ -1121,11 +1169,7 @@ function renderDashboardTable(records) {
         const admissionNo = student ? (student.admission_number || 'None') : 'None';
         const className = activeRecordsClassName || 'Class';
         
-        const keys = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
-        const completedCount = keys.filter(k => {
-            const val = r[k] || r.prayers?.[k];
-            return val === 'Jamaat' || val === 'Individual' || val === 'Qaza';
-        }).length;
+        const completedCount = getRecordCompletedPrayersCount(r);
         const completionPct = Math.round((completedCount / 5) * 100);
         
         const getStatusBadge = (val) => {
@@ -1137,11 +1181,11 @@ function renderDashboardTable(records) {
             return `<span class="text-muted">—</span>`;
         };
         
-        const fVal = r.fajr || r.prayers?.fajr;
-        const dVal = r.dhuhr || r.prayers?.dhuhr;
-        const aVal = r.asr || r.prayers?.asr;
-        const mVal = r.maghrib || r.prayers?.maghrib;
-        const iVal = r.isha || r.prayers?.isha;
+        const fVal = r.fajr || r.prayers?.fajr || r.Fajr || r.prayers?.Fajr;
+        const dVal = r.dhuhr || r.prayers?.dhuhr || r.Dhuhr || r.prayers?.Dhuhr;
+        const aVal = r.asr || r.prayers?.asr || r.Asr || r.prayers?.Asr;
+        const mVal = r.maghrib || r.prayers?.maghrib || r.Maghrib || r.prayers?.Maghrib;
+        const iVal = r.isha || r.prayers?.isha || r.Isha || r.prayers?.Isha;
         
         const studiedQuran = r.subjects?.includes('quran') || r.subjects?.some(s => s.toLowerCase().includes('quran')) ? 'Yes' : 'No';
         const salawat = r.salawatCount || 0;
@@ -1393,7 +1437,7 @@ function initRecordsRedesignListeners() {
     
     // Reset filters button click
     document.getElementById('recordsFilterResetBtn').addEventListener('click', () => {
-        recordsState.dateFilterType = 'range';
+        recordsState.dateFilterType = 'yesterday';
         recordsState.singleDate = todayStr;
         recordsState.startDate = getDateAgo(30);
         recordsState.endDate = todayStr;
@@ -1404,7 +1448,7 @@ function initRecordsRedesignListeners() {
         recordsState.sortDirection = 'desc';
         recordsState.currentPage = 1;
         
-        document.getElementById('recordsFilterDateRange').value = 'range';
+        document.getElementById('recordsFilterDateRange').value = 'yesterday';
         document.getElementById('recordsFilterSingleDate').value = todayStr;
         document.getElementById('recordsFilterStartDate').value = recordsState.startDate;
         document.getElementById('recordsFilterEndDate').value = todayStr;
@@ -1413,8 +1457,8 @@ function initRecordsRedesignListeners() {
         document.getElementById('recordsFilterSearch').value = '';
         
         document.getElementById('filterSingleDateCol').classList.add('d-none');
-        document.getElementById('filterStartDateCol').classList.remove('d-none');
-        document.getElementById('filterEndDateCol').classList.remove('d-none');
+        document.getElementById('filterStartDateCol').classList.add('d-none');
+        document.getElementById('filterEndDateCol').classList.add('d-none');
         
         refreshClassRecordsUI();
     });
@@ -1697,8 +1741,9 @@ function generateAllStudentsReport(action, instName, periodStr, startStr, endStr
         
         studentRecs.forEach(r => {
             keys.forEach(k => {
-                const val = r[k] || r.prayers?.[k];
-                if (val === 'Jamaat' || val === 'Individual' || val === 'Qaza') {
+                const pCap = k.charAt(0).toUpperCase() + k.slice(1);
+                const val = r[k] || r.prayers?.[k] || r[pCap] || r.prayers?.[pCap];
+                if (isPrayerCompleted(val)) {
                     completed++;
                     pStats[k]++;
                 } else {
@@ -1797,12 +1842,21 @@ async function generateSingleStudentReport(action, instName, studentId, periodSt
     let tableRows = '';
     studentRecs.forEach(r => {
         const getStatusSymbol = (k) => {
-            const val = r[k] || r.prayers?.[k];
+            const pCap = k.charAt(0).toUpperCase() + k.slice(1);
+            const val = r[k] || r.prayers?.[k] || r[pCap] || r.prayers?.[pCap];
             if (val === 'Jamaat') { completed++; return 'Jam (Y)'; }
             if (val === 'Individual') { completed++; return 'Ind (Y)'; }
             if (val === 'Qaza') { completed++; return 'Qaz (Y)'; }
+            if (val === true || val === 'completed' || val === 'yes' || val === '1' || val === 'true' || val === 1) {
+                completed++;
+                return 'Jam (Y)';
+            }
             if (val === 'Incorrect') { missed++; return 'Inc (N)'; }
             if (val === 'Not Prayed') { missed++; return 'Mis (N)'; }
+            if (val === false || val === 'missed' || val === 'no' || val === '0' || val === 'false' || val === 0) {
+                missed++;
+                return 'Mis (N)';
+            }
             missed++;
             return '—';
         };
@@ -2095,7 +2149,8 @@ async function fetchAndRenderLeaderboard() {
                 }
 
                 keys.forEach(k => {
-                    const val = r[k] || r.prayers?.[k];
+                    const pCap = k.charAt(0).toUpperCase() + k.slice(1);
+                    const val = r[k] || r.prayers?.[k] || r[pCap] || r.prayers?.[pCap];
                     if (val === 'Jamaat') {
                         completedPrayersCount++;
                         jamCount++;
@@ -2105,6 +2160,13 @@ async function fetchAndRenderLeaderboard() {
                     } else if (val === 'Qaza') {
                         completedPrayersCount++;
                         qazCount++;
+                    } else if (val === true || val === 'completed' || val === 'yes' || val === '1' || val === 'true' || val === 1) {
+                        completedPrayersCount++;
+                        jamCount++;
+                    } else if (val === 'Incorrect' || val === 'Not Prayed') {
+                        misCount++;
+                    } else if (val === false || val === 'missed' || val === 'no' || val === '0' || val === 'false' || val === 0) {
+                        misCount++;
                     } else {
                         misCount++;
                     }

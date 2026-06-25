@@ -544,9 +544,9 @@
                                 <label class="form-label text-muted small fw-bold mb-1">Date Filter</label>
                                 <select id="recordsFilterDateRange" class="form-select bg-light border-0 shadow-sm text-dark fw-bold rounded-3">
                                     <option value="today">Today</option>
-                                    <option value="yesterday">Yesterday</option>
+                                    <option value="yesterday" selected>Yesterday</option>
                                     <option value="custom">Custom Date</option>
-                                    <option value="range" selected>Date Range</option>
+                                    <option value="range">Date Range</option>
                                 </select>
                             </div>
                             
@@ -555,11 +555,11 @@
                                 <input type="date" id="recordsFilterSingleDate" class="form-control bg-light border-0 shadow-sm fw-bold">
                             </div>
                             
-                            <div class="col-12 col-md-3" id="filterStartDateCol">
+                            <div class="col-12 col-md-3 d-none" id="filterStartDateCol">
                                 <label class="form-label text-muted small fw-bold mb-1">Start Date</label>
                                 <input type="date" id="recordsFilterStartDate" class="form-control bg-light border-0 shadow-sm fw-bold">
                             </div>
-                            <div class="col-12 col-md-3" id="filterEndDateCol">
+                            <div class="col-12 col-md-3 d-none" id="filterEndDateCol">
                                 <label class="form-label text-muted small fw-bold mb-1">End Date</label>
                                 <input type="date" id="recordsFilterEndDate" class="form-control bg-light border-0 shadow-sm fw-bold">
                             </div>
